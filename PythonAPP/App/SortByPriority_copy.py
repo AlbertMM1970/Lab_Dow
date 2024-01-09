@@ -2,7 +2,6 @@
 import datetime
 from tkinter import filedialog
 import tkinter as tk
-# import customtkinter as cTk
 from tkinter import *
 import tkinter.ttk as ttk
 import os.path
@@ -15,15 +14,12 @@ from tkinter.simpledialog import askfloat
 from tkinter.simpledialog import askinteger
 from tkinter.messagebox import showinfo
 from decimal import *
-import tkinter.font as font
-from collections import defaultdict
 import webbrowser
 from difflib import SequenceMatcher
 import clipboard as copia
-import sqlite3
-import sys
-import traceback
+from Base_Datos.sql_Data import Sql_Data
 
+ 
 # BackUP = []
 # data = ""
 mat = []
@@ -45,7 +41,6 @@ j = ""
 l = 0
 h = []
 matM = []
-matYesNo = []
 id2 = ""
 Base = False
 resin = False
@@ -53,85 +48,6 @@ input1 = False
 input2 = False
 LogOpen = False
 text2 = ""
-
-
-class Sql_Data():
-
-    def Connection():
-        try:
-            sqliteConnection = sqlite3.connect('SQLite_Lab.db')
-            cursor = sqliteConnection.cursor()
-            print("Database created and Successfully Connected to SQLite")
-
-            sqlite_select_Query = "select sqlite_version();"
-            cursor.execute(sqlite_select_Query)
-            record = cursor.fetchall()
-            print("SQLite Database Version is: ", record)
-            cursor.close()
-
-        except sqlite3.Error as error:
-            print("Error while connecting to sqlite", error)
-        finally:
-            if sqliteConnection:
-                sqliteConnection.close()
-                print("The SQLite connection is closed")
-
-    def Insert_data(name, date, mfi, density):
-
-        try:
-            sqliteConnection = sqlite3.connect('SQLite_Lab.db')
-            cursor = sqliteConnection.cursor()
-            print("Successfully Connected to SQLite")
-
-            sqlite_insert_query = f"""INSERT INTO db_resin(
-                                  id,                                  
-                                  date,
-                                  resin, 
-                                  mfi, 
-                                  density) 
-                                  VALUES (?,{name},{date},{mfi},{density})"""
-
-            count = cursor.execute(sqlite_insert_query)
-            sqliteConnection.commit()
-            print("Record inserted successfully into db_resin table ",
-                  cursor.rowcount)
-            cursor.close()
-
-        except sqlite3.Error as error:
-            print("Failed to insert data into sqlite table", error)
-        finally:
-            if sqliteConnection:
-                sqliteConnection.close()
-                print("The SQLite connection is closed")
-
-    def Create_db():
-
-        try:
-            sqliteConnection = sqlite3.connect('SQLite_Lab.db')
-            sqlite_create_table_query = '''CREATE TABLE IF NOT EXISTS db_resin (
-                                id INTEGER PRIMARY KEY,                                
-                                date datetime NOT NULL, 
-                                resin VARCHAR(100) NOT NULL UNIQUE,                               
-                                mfi DECIMAL NOT NULL,
-                                density DECIMAL NOT NULL);'''
-
-            cursor = sqliteConnection.cursor()
-            print("Successfully Connected to SQLite")
-            cn = cursor.execute(sqlite_create_table_query)
-            sqliteConnection.commit()
-            if cn == True:
-                print("SQLite table created")
-            else:
-                print("SQLite table already exists")
-
-            cursor.close()
-
-        except sqlite3.Error as error:
-            print("Error while creating a sqlite table", error)
-        finally:
-            if sqliteConnection:
-                sqliteConnection.close()
-                print("sqlite connection is closed")
 
 #######  -------- GUI - Application SortByPriority -------- ######
 
@@ -284,6 +200,7 @@ class Window:
             webbrowser.open(f"{url} ?StudyID={self.studyN}")
 
     def CleanTXT(self):
+        pass
         self.entry.delete('0', END)
         self.entry1.delete('0', END)
 
@@ -451,12 +368,7 @@ class Window:
                 self.Get_Engineer(row)
 
             value_missing = 0
-            pasa = False
-            # and (row[6] != '' and row[6] != None):
-            if "Sample" in str(row[1]):
-                dat1 = self.GetData(row)
-
-            if "Layer" in str(row[1]) and len(str(row[1]).split(" ")) > 1:
+            if (("Layer" in str(row[1]) and (len(str(row[1]).split(" ")) > 1) or "Sample" in str(row[1]))) and (row[6] != '' and row[6] != None):
 
                 rowM = row[10]
                 if (rowM == ''):  # and (row[6] != '' or row[6] != None):
@@ -465,21 +377,10 @@ class Window:
                 if (rowM == ''):  # and (row[6] != '' or row[6] != None):
                     value_missing = value_missing + 2
                 if self.Check_Valor(rowM, "Density") == False:
-
-                    for n, d, t, b in mats:
-                        if row[6] == n and b == True:
-                            row[8] = self.InputMFI_DENSITY(
-                                row[6], "Density", True)
-                            dat1 = self.GetData(row)
-                            pasa = True
-
-                    if pasa == False:
-
-                        msg_box = tk.messagebox.askquestion('Wrong Value', f'This Density value {rowM} for this material {row[6]} is wrong.\nDo you want to change it?',
-                                                            icon='warning', parent=self.master)
-                        if msg_box == "yes":
-                            row[8] = self.InputMFI_DENSITY(
-                                row[6], "Density", True)
+                    msg_box = tk.messagebox.askquestion('Wrong Value', f'This Density value {rowM} is wrong.\nDo you want to change it',
+                                                        icon='warning', parent=self.master)
+                    if msg_box == "yes":
+                        self.InputMFI_DENSITY(row[6], "Density")
 
                 if mfi_boolean == False and value_missing == 1:
                     msg_box = tk.messagebox.askquestion('Mfi missing', 'Some Mfi values are missing.\nDo you want to fill all of them?',
@@ -553,13 +454,12 @@ class Window:
         print("Número de Samples ----- " + str(nsamples))
         self.set_Log_Text("Número de Samples ----- " + str(nsamples))
 
-    def InputMFI_DENSITY(self, name, tip, bo=False):
+    def InputMFI_DENSITY(self, name, tip):
 
         global input1
         global input2
 
         pas = False
-
         for n, t in matM:
             if n == name and t == tip:
                 pas = True
@@ -568,9 +468,8 @@ class Window:
             ad = name, tip
             matM.append(ad)
             valor = self.CheckMFI_DEN(name, tip)
-
             if valor != "":
-                ins = name, valor, tip, bo
+                ins = name, valor, tip
                 mats.append(ins)
                 # self.Save_MFI_Density(name, valor, tip)
                 return valor
@@ -578,7 +477,7 @@ class Window:
                 f'{tip} missing', f'This component - {name} has not Value.\nPlease entry the new value.', parent=self.master)
             if valor == None:
                 valor = 0
-            ins = name, valor, tip, bo
+            ins = name, valor, tip
             mats.append(ins)
             self.Save_MFI_Density(name, valor, tip)
             return valor
@@ -590,19 +489,19 @@ class Window:
     def Check_Valor(self, valor, types):
 
         if types == "Density":
-            if not "." in str(valor) and str(valor) != "":
-                return False
-            else:
+            if "." in str(valor):
                 return True
+            else:
+                return False
         if types == "MFI":
-            if "." in str(valor) and str(valor) != "":
-                return False
-            else:
+            if "." in str(valor):
                 return True
+            else:
+                return False
 
     def CheckMFI_DEN(self, name, tip):
         valor = ""
-        mat1 = f'C:\Python\{tip}/{name}.txt'
+        mat1 = "C:/Python/{}/{}.txt".format(tip,name)
         check_file = os.path.isfile(mat1)
         if check_file == True:
 
@@ -617,7 +516,7 @@ class Window:
 
     def Save_MFI_Density(self, mat, valor, tip):
 
-        mat1 = f'C:\Python\{tip}/{mat}.txt'
+        mat1 = "C:/Python/{}/{}.txt".format(tip,mat)
         text_file = open(mat1, "w")
         text_file.write(str(valor))
         text_file.close
@@ -1838,17 +1737,15 @@ class ShowDensity(tk.Toplevel):
 #######  -------- GUI - Start app -------- ######
 
 
-def main():
+def start_app():
 
-    sql = Sql_Data
-    sql.Connection()
-    sql.Create_db()
-    sql.Insert_data("01-01-2024", "'LDPE 310 E'", 0.86, 0.967)
-
+    sql = Sql_Data()  
+    sql.create_db()
+      
     root = tk.Tk()
     Window(root)
     root.mainloop()
 
 
 if __name__ == '__main__':
-    main()
+   start_app()
