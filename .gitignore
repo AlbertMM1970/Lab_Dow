@@ -1,7 +1,7 @@
-PythonAPP\__pycache__
-PythonAPP\App\share
-PythonAPP\App\__pycache__
-PythonAPP\App\Scripts
-PythonAPP\App\Lib
+PythonAPP\__pycache__\
+PythonAPP\App\share\
+PythonAPP\App\__pycache__\
+PythonAPP\App\Scripts\
+PythonAPP\App\Lib\
 pyvenv.cfg
-PythonAPP\App\gui\__pycache__
+PythonAPP\App\gui\__pycache__\
