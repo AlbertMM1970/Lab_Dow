@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="Img">
+    <file>Carousel-Background-Image.jpg</file>
+    <file>24239wall.jpg</file>
+  </qresource>
+</RCC>
