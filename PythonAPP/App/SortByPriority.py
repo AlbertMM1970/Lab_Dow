@@ -333,8 +333,10 @@ class Window:
             if self.IDsample != "":
                 self.IDsample = (str(dat[0]).replace("Sample ID: ", ""))
                 SampleN = True
+                return
             else:
                 SampleN = False
+                return
 
         if "Layer 01" in spl1:
             data = "/01/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
@@ -405,6 +407,7 @@ class Window:
         self.DatoStudy = []
         rep = ""
         mat.clear()
+        mats.clear()
         Owner = ""
         SamplesN.clear()
         self.entry3.delete('0', END)
@@ -442,32 +445,34 @@ class Window:
         mfi_boolean = False
         den_boolean = False
         mfi_den_boolean = False
+
         while curr_row < num_rows:
             curr_row += 1
             row = worksheet.row_values(curr_row)
-            # if curr_row > -6 and curr_row < 30:
-            # self.Get_StudyNumber(row)
             if curr_row > 2 and curr_row < 6:
                 self.Get_Engineer(row)
 
             value_missing = 0
             pasa = False
-            # and (row[6] != '' and row[6] != None):
-            if "Sample" in str(row[1]):
+            pasa1 = False
+
+            if "Sample ID:" in str(row[1]):  # and len(str(row[1])) == 10:
                 dat1 = self.GetData(row)
 
-            if "Layer" in str(row[1]) and len(str(row[1]).split(" ")) > 1:
+            if "Layer" in str(row[1]) and len(str(row[1])) == 8:
 
                 rowM = row[10]
-                if (rowM == ''):  # and (row[6] != '' or row[6] != None):
+                if rowM == '' or rowM == None:
                     value_missing = 1
                 rowM = row[8]
-                if (rowM == ''):  # and (row[6] != '' or row[6] != None):
+                if rowM == '' or rowM == None:
                     value_missing = value_missing + 2
-                if self.Check_Valor(rowM, "Density") == False:
+
+                # check Density value
+                if self.Check_Valor(row[8], "Density") == False:
 
                     for n, d, t, b in mats:
-                        if row[6] == n and b == True:
+                        if row[6] == n and b == True and t == "Density":
                             row[8] = self.InputMFI_DENSITY(
                                 row[6], "Density", True)
                             dat1 = self.GetData(row)
@@ -480,6 +485,24 @@ class Window:
                         if msg_box == "yes":
                             row[8] = self.InputMFI_DENSITY(
                                 row[6], "Density", True)
+
+                # Check MFI value
+                if self.Check_Valor(row[10], "MFI") == False:
+
+                    for n, d, t, b in mats:
+                        if row[6] == n and b == True and t == "MFI":
+                            row[10] = self.InputMFI_DENSITY(
+                                row[6], "MFI", True)
+                            dat1 = self.GetData(row)
+                            pasa1 = True
+
+                    if pasa1 == False:
+
+                        msg_box = tk.messagebox.askquestion('Wrong Value', f'This MFI value {rowM} for this material {row[6]} is wrong.\nDo you want to change it?',
+                                                            icon='warning', parent=self.master)
+                        if msg_box == "yes":
+                            row[10] = self.InputMFI_DENSITY(
+                                row[6], "MFI", True)
 
                 if mfi_boolean == False and value_missing == 1:
                     msg_box = tk.messagebox.askquestion('Mfi missing', 'Some Mfi values are missing.\nDo you want to fill all of them?',
@@ -572,7 +595,7 @@ class Window:
             if valor != "":
                 ins = name, valor, tip, bo
                 mats.append(ins)
-                # self.Save_MFI_Density(name, valor, tip)
+
                 return valor
             valor = askfloat(
                 f'{tip} missing', f'This component - {name} has not Value.\nPlease entry the new value.', parent=self.master)
@@ -589,20 +612,30 @@ class Window:
 
     def Check_Valor(self, valor, types):
 
+        if valor == None:
+            return True
+
         if types == "Density":
-            if not "." in str(valor) and str(valor) != "":
+            if (not "." in str(valor) and str(valor) != ""):
+                if str(valor).isdigit:
+                    if int(valor) in range(1, 50):
+                        return True
                 return False
             else:
                 return True
+
         if types == "MFI":
-            if "." in str(valor) and str(valor) != "":
+            if (not "." in str(valor) and str(valor) != ""):
+                if str(valor).isdigit:
+                    if int(valor) in range(1, 50):
+                        return True
                 return False
             else:
                 return True
 
     def CheckMFI_DEN(self, name, tip):
         valor = ""
-        mat1 = f'C:/Python/{tip}/{name}.txt'
+        mat1 = f'C:\Python\{tip}/{name}.txt'
         check_file = os.path.isfile(mat1)
         if check_file == True:
 
@@ -617,7 +650,7 @@ class Window:
 
     def Save_MFI_Density(self, mat, valor, tip):
 
-        mat1 = f'C:/Python/{tip}/{mat}.txt'
+        mat1 = f'C:\Python\{tip}/{mat}.txt'
         text_file = open(mat1, "w")
         text_file.write(str(valor))
         text_file.close
