@@ -10,6 +10,7 @@ from tkinter import messagebox
 import xlsxwriter
 import xlrd
 import copy
+import shutil
 from functools import partial
 from tkinter.simpledialog import askfloat
 from tkinter.simpledialog import askinteger
@@ -164,7 +165,7 @@ class Window:
         self.btn = tk.Button(
             text="Choose File ...", command=self.Choose_File)
         self.btn.grid(row=0, column=0, padx=5, pady=10,
-                      ipady=0, ipadx=5, sticky="NSE")
+                      ipady=0, ipadx=5, columnspan=7, sticky="NSE")
 
         # Button Open file
         self.btn1 = tk.Button(text="Open File ...", command=self.open_file)
@@ -214,7 +215,13 @@ class Window:
         # Button Export Excel file
         self.btn3 = tk.Button(text="Export to EXCEL file",
                               command=self.SaveToExcel)
-        self.btn3.grid(row=2, column=0, columnspan=2, padx=10,
+        self.btn3.grid(row=2, column=0, columnspan=7, padx=10,
+                       pady=5, ipady=0, ipadx=0, sticky="w")
+
+        # Button MDO tools
+        self.btn4 = tk.Button(text="MDO tools",
+                              command=self.mdotools)
+        self.btn4.grid(row=2, column=1, columnspan=7, padx=40,
                        pady=5, ipady=0, ipadx=0, sticky="w")
 
         # Text to entry EXCEL name
@@ -278,10 +285,72 @@ class Window:
 
     def Open_web(self):
 
+        pathfile = r'C:/Python/Studies/'
+        pathDown = f'C:/Users/{os.getlogin()}/Downloads/'
+        pathDownFile = f'C:/Users/{os.getlogin()}/Downloads/StudySummary_BC.xlsx'
+        pathDownFile1 = f'C:/Users/{os.getlogin()}/Downloads/StudySummary_BC .xlsx'
+
+        if os.path.isfile(pathDownFile):
+            os.remove(pathDownFile)
+        if os.path.isfile(pathDownFile1):
+            os.remove(pathDownFile1)
+
+        # print(pathDown)
         self.studyN = askinteger(
             "Search Study", "-                    Enter Study Number                    -")
-        if self.studyN != None:
-            webbrowser.open(f"{url} ?StudyID={self.studyN}")
+
+        ex = False
+        check_file = os.path.isfile(
+            pathfile + '/' + str(self.studyN) + '.xlsx')
+
+        if not check_file:
+
+            msg = tk.messagebox.askquestion(
+                "Studies saved", f"This study {self.studyN} isn't saved\nDo you want to save it?")
+            if msg == "yes":
+                webbrowser.open(f"{url} ?StudyID={self.studyN}")
+                while ex == False:
+                    msg = tk.messagebox.askquestion(
+                        "Saving Study", f"Are you sure that the excel file\nof this study {self.studyN} is downloaded?")
+                    if msg == "yes":
+                        try:
+                            if os.path.isfile(pathDownFile):
+                                Downfile = pathDownFile
+                            if os.path.isfile(pathDownFile1):
+                                Downfile = pathDownFile1
+
+                            shutil.copy2(Downfile, pathfile +
+                                         str(self.studyN) + '.xlsx')
+                            os.remove(Downfile)
+                            ex = True
+                            messagebox.showinfo(message="Job DONE!!",
+                                                title="SSaving Study")
+                            msg = tk.messagebox.askquestion(
+                                "Studies saved", f"Do you want to open it?")
+                            if msg == "yes":
+                                nameFile = str(pathfile) + \
+                                    str(self.studyN) + '.xlsx'
+                                self.entry.insert(0, nameFile)
+                                self.filename = nameFile
+                                self.open_file()
+                        except:
+                            ex = False
+                    else:
+                        ex = True
+            else:
+                webbrowser.open(f"{url} ?StudyID={self.studyN}")
+
+        else:
+            msg = tk.messagebox.askquestion(
+                "Studies stored", f"This study {self.studyN} is saved\nDo you want to open it?")
+            if msg == "yes":
+                nameFile = str(pathfile) + str(self.studyN) + '.xlsx'
+                self.entry.insert(0, nameFile)
+                self.filename = nameFile
+                self.open_file()
+            else:
+                if self.studyN != None:
+                    webbrowser.open(f"{url} ?StudyID={self.studyN}")
 
     def CleanTXT(self):
         self.entry.delete('0', END)
@@ -957,6 +1026,9 @@ class Window:
         except:
             return
 
+    def mdotools(self):
+        Mdotools(self.master)
+
 #######  -------- GUI - Debug Console -------- ######
 
 
@@ -1289,7 +1361,7 @@ class Sample_Window(tk.Toplevel):
         rate = []
         rate.clear()
         option = False
-        PFile = r"C:\Python\DataSheet/"  # + self.mat_item + ".pdf"
+        PFile = r"C:/Python/DataSheet/"  # + self.mat_item + ".pdf"
         contenido = os.scandir(PFile)
         for elemento in contenido:
             # print(str(elemento.name))
@@ -1867,6 +1939,27 @@ class ShowDensity(tk.Toplevel):
             return
         tk.Label(master=self, text=txt, font=(
             "Verdana", 12)).place(x=(40+c), y=(60+pos))
+
+
+class Mdotools(tk.Toplevel):
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.resizable(0, 0)
+        wtotal = self.winfo_screenwidth()
+        htotal = self.winfo_screenheight()
+        wventana = 800
+        hventana = 500
+        pwidth = round(wtotal/2-wventana/2)
+        pheight = round(htotal/2-hventana/2)
+        self.geometry(str(wventana)+"x"+str(hventana) +
+                      "+"+str(pwidth)+"+"+str(pheight))
+        self.title("MDO tools calculation")
+        self.focus()
+        self.grab_set()
+
+        Label(master=self, text="MDO tools calculation",
+              font=("Verdana bold", 14)).place(x=190, y=20)
 
 #######  -------- GUI - Start app -------- ######
 
