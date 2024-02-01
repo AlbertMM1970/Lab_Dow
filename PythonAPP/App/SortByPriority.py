@@ -1,5 +1,6 @@
 
 import datetime
+import stat
 from tkinter import filedialog
 import tkinter as tk
 # import customtkinter as cTk
@@ -24,6 +25,8 @@ import clipboard as copia
 import sqlite3
 import sys
 import traceback
+import os
+
 
 # BackUP = []
 # data = ""
@@ -165,7 +168,7 @@ class Window:
         self.btn = tk.Button(
             text="Choose File ...", command=self.Choose_File)
         self.btn.grid(row=0, column=0, padx=5, pady=10,
-                      ipady=0, ipadx=5, columnspan=7, sticky="NSE")
+                      ipady=0, ipadx=5, columnspan=1, sticky="NSE")
 
         # Button Open file
         self.btn1 = tk.Button(text="Open File ...", command=self.open_file)
@@ -215,13 +218,23 @@ class Window:
         # Button Export Excel file
         self.btn3 = tk.Button(text="Export to EXCEL file",
                               command=self.SaveToExcel)
-        self.btn3.grid(row=2, column=0, columnspan=7, padx=10,
+        self.btn3.grid(row=2, column=0, columnspan=2, padx=10,
                        pady=5, ipady=0, ipadx=0, sticky="w")
 
         # Button MDO tools
         self.btn4 = tk.Button(text="MDO tools",
                               command=self.mdotools)
-        self.btn4.grid(row=2, column=1, columnspan=7, padx=40,
+        self.btn4.grid(row=2, column=1, columnspan=3, padx=40,
+                       pady=5, ipady=0, ipadx=0, sticky="w")
+        # Button Datasheet
+        self.btn4 = tk.Button(text="DataSheet",
+                              command=self.open_DataSheet)
+        self.btn4.grid(row=2, column=2, columnspan=5, padx=20,
+                       pady=5, ipady=0, ipadx=0, sticky="w")
+        # Button RawData
+        self.btn5 = tk.Button(text="RawData tools",
+                              command=self.rawData)
+        self.btn5.grid(row=2, column=3, columnspan=6, padx=30,
                        pady=5, ipady=0, ipadx=0, sticky="w")
 
         # Text to entry EXCEL name
@@ -283,6 +296,101 @@ class Window:
 
         self.firstOPen = False
 
+    def rawData(self):
+
+        today = datetime.date.today()
+        year = today.year
+        gipnpath = "//tgnt01/g-tg-plastic/Laboratory/LIMS/LIMS Upload"
+
+        msg = tk.simpledialog.askinteger(
+            "RAW DATA TOOLS", "-               Please, enter the STUDY NUMBER                   -")
+        if msg == "" or msg == None:
+            return
+
+        rawdatapath_main = f"//tnnt02/ptc2/Nautilus/GLIMS_Raw_Data/{str(year)}"
+
+        rawdatapath = "//tnnt02/ptc2/Nautilus/GLIMS_Raw_Data/" + \
+            str(year) + "/Study_" + str(msg) + "/Tarragona TSD Fabrication Lab"
+
+        if os.path.isdir(rawdatapath):
+            with os.scandir(rawdatapath) as ficheros:
+                ficheros = [
+                    fichero.name for fichero in ficheros if fichero.is_file()]
+            if len(ficheros) > 0:
+                msgb = tk.messagebox.askquestion(
+                    "Study found", f"This study {msg} is on the RawData.\nAnd there are {len(ficheros)} file/s \nDo you want to pass all of them to GIPN?")
+                if msgb == "yes":
+
+                    try:
+                        for fl in ficheros:
+                            shutil.copy2(rawdatapath + "/" + str(fl), gipnpath)
+                        tk.messagebox.showinfo(
+                            "Passing files", "File/s passed correctly")
+                    except:
+                        tk.messagebox.showerror(
+                            "Passing files", "File/s not passed correctly", icon="warning")
+                else:
+                    msgb = tk.messagebox.askquestion(
+                        "Study found", f"Do you want to select the files to pass to GIPN?", icon="info")
+                if msgb == "yes":
+                    newtk = tk.Toplevel()  # 416673
+                    newtk.resizable(0, 0)
+                    newtk.title("Files on the Raw Data Study Folder")
+                    wtotal = newtk.winfo_screenwidth()
+                    htotal = newtk.winfo_screenheight()
+                    # Guardamos el largo y alto de la ventana
+                    wventana = 800
+                    hventana = 500
+                    # Aplicamos la siguiente formula para calcular donde debería posicionarse
+                    pwidth = round(wtotal/2-wventana/2)
+                    pheight = round(htotal/2-hventana/2)
+                    # Se lo aplicamos a la geometría de la ventana
+                    newtk.geometry(str(wventana)+"x"+str(hventana) +
+                                   "+"+str(pwidth)+"+"+str(pheight))
+                    newtk.focus()
+                    newtk.grab_set()
+                    variables = []
+                    c = 0
+                    self.data = ""
+                    Label(newtk, text=f"Files of the STUDY {msg} ", font=("Verdana bold", 16)).place(
+                        x=230, y=10)
+                    Button(newtk, text=f"Copy to GIPN", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath)).place(
+                        x=330, y=450)
+
+                    for fl in ficheros:
+                        variables.append(tk.IntVar(value=0))
+                        tk.Checkbutton(newtk, text=str(
+                            fl), variable=variables[-1], onvalue=1, offvalue=0, font="Verdana 12").place(x=40, y=60+c)
+                        c = c + 22
+                        # If row is out of range
+                else:
+                    msgb = tk.messagebox.askquestion(
+                        "Study found", f"Do you want to open the RaWData folder?", icon="info")
+                    if msgb == "yes":
+                        webbrowser.open(str("file:") + rawdatapath)
+
+        else:
+            tk.messagebox.showerror(
+                "Checking Study", f"This Study - {msg} - isn't in the RawData folder", icon="warning")
+            msgb = tk.messagebox.askquestion(
+                "Study not found", f"Do you want to open the RawData folder?", icon="info")
+            if msgb == "yes":
+                webbrowser.open(str("file:") + rawdatapath_main)
+
+    def save_gipn(self, wn, data, data1, rawdatapath, gipnpath):
+
+        result = [ing for ing, cb in zip(data, data1) if cb.get() > 0]
+        try:
+            for fl in result:
+                shutil.copy2(rawdatapath + "/" + str(fl), gipnpath)
+            tk.messagebox.showinfo(
+                "Passing files", "File/s passed correctly", parent=wn)
+            wn.destroy()
+        except:
+            tk.messagebox.showerror(
+                "Passing files", "File/s not passed correctly", icon="warning", parent=wn)
+            wn.destroy()
+
     def Open_web(self):
 
         pathfile = r'C:/Python/Studies/'
@@ -298,6 +406,9 @@ class Window:
         # print(pathDown)
         self.studyN = askinteger(
             "Search Study", "-                    Enter Study Number                    -")
+
+        if self.studyN == "" or self.studyN == None:
+            return
 
         ex = False
         check_file = os.path.isfile(
@@ -338,6 +449,7 @@ class Window:
                     else:
                         ex = True
             else:
+
                 webbrowser.open(f"{url} ?StudyID={self.studyN}")
 
         else:
@@ -486,6 +598,7 @@ class Window:
         try:
             workbook = xlrd.open_workbook(self.filename)
             worksheet = workbook.sheet_by_name('Sheet2')
+            self.master.state("zoomed")
 
         except:
             messagebox.showerror(
@@ -1027,7 +1140,57 @@ class Window:
             return
 
     def mdotools(self):
+        self.master.state("zoomed")
         Mdotools(self.master)
+
+    def open_DataSheet(self):
+
+        msg = tk.simpledialog.askstring(
+            "DataSheet finder", "-               Please, enter the resine Name                   -")
+        if msg == "" or msg == None:
+            return
+        msg = str(msg).upper()
+        rate = []
+        rate.clear()
+        option = False
+        PFile = r"C:/Python/DataSheet/"  # + self.mat_item + ".pdf"
+        contenido = os.scandir(PFile)
+        for elemento in contenido:
+
+            elementos = elemento.name[0:-4].upper()
+            elementos = elementos.replace("POLYETHYLENE RESIN", "")
+            elementos = elementos.replace("POLYOLEFIN PLASTOMER", "")
+            elementos = elementos.replace("DOW", "")
+            elementos = elementos.replace("ENHANCED", "")
+
+            elementos = str(elementos)
+
+            r = SequenceMatcher(None, str(elementos),
+                                msg).ratio()
+            namemat = elemento, r
+            rate.append(namemat)
+
+        max_ratio = max(rate, key=lambda x: x[1])
+
+        if max_ratio[1] > 0.60:
+
+            webbrowser.open(max_ratio[0])
+            option = True
+
+        if option == False:
+
+            self.msg_box = tk.messagebox.askquestion('Datasheet report', "There is not datasheet file for " + "- " + str(msg) + " -"
+                                                     + " \nDo you want to find it on the iProduct Quick Search?", icon='warning')
+            if self.msg_box == "yes":
+                copia.copy(msg)
+                webbrowser.open(
+                    'https://prodlist.intranet.dow.com/Search/Search.aspx')
+            else:
+                self.msg_box = tk.messagebox.askquestion(
+                    'Datasheet report', "Do you want to open the DataSheet folder\nto find it there? ", icon='info')
+                if self.msg_box == "yes":
+                    webbrowser.open(str("file:")+PFile)
+
 
 #######  -------- GUI - Debug Console -------- ######
 
@@ -1354,10 +1517,11 @@ class Sample_Window(tk.Toplevel):
         else:
             True
 
-    def Open_Datasheet(self):
+    def Open_Datasheet(self, op=False):
 
-        if self.Check_Item_Tree() == False:
+        if self.Check_Item_Tree() == False and op == False:
             return
+
         rate = []
         rate.clear()
         option = False
@@ -1383,12 +1547,17 @@ class Sample_Window(tk.Toplevel):
             print(LogtText)
             self.obk.set_Log_Text(self.obj1, LogtText)
 
-            self.msg_box = tk.messagebox.askquestion('Datasheet report', "There is no datasheet file for " + str(self.mat_item)
+            self.msg_box = tk.messagebox.askquestion('Datasheet report', "There is not datasheet file for " + "- " + str(self.mat_item) + " -"
                                                      + " \nDo you want to find it?", icon='warning', parent=self)
             if self.msg_box == "yes":
                 copia.copy(self.mat_item)
                 webbrowser.open(
                     'https://prodlist.intranet.dow.com/Search/Search.aspx')
+            else:
+                self.msg_box = tk.messagebox.askquestion(
+                    'Datasheet report', "Do you want to open the DataSheet folder\nto find it there? ", icon='info', parent=self)
+                if self.msg_box == "yes":
+                    webbrowser.open(PFile)
 
     def Kg_hour(self):
         ab = 0
@@ -1949,7 +2118,7 @@ class Mdotools(tk.Toplevel):
         wtotal = self.winfo_screenwidth()
         htotal = self.winfo_screenheight()
         wventana = 800
-        hventana = 500
+        hventana = 600
         pwidth = round(wtotal/2-wventana/2)
         pheight = round(htotal/2-hventana/2)
         self.geometry(str(wventana)+"x"+str(hventana) +
@@ -1958,8 +2127,284 @@ class Mdotools(tk.Toplevel):
         self.focus()
         self.grab_set()
 
-        Label(master=self, text="MDO tools calculation",
-              font=("Verdana bold", 14)).place(x=190, y=20)
+        Label(self, text="MDO tools calculation",
+              font=("Verdana bold", 14)).grid(row=0, column=0, padx=(0, 0), columnspan=6, pady=10)
+        Label(self, text="GSM Calculation",
+              font=("Verdana bold", 12)).grid(row=2, column=2, padx=(0, 0), columnspan=5, pady=5, sticky="w")
+        Label(self, text="Set GSM",
+              font=("Verdana bold", 10)).grid(row=3, column=0, padx=(20, ), pady=5, sticky="w")
+        Label(self, text="Real GSM",
+              font=("Verdana bold", 10)).grid(row=3, column=1, padx=(15, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Current Speed",
+              font=("Verdana bold", 10)).grid(row=3, column=2, padx=(0, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Current Kg/h",
+              font=("Verdana bold", 10)).grid(row=3, column=3, padx=(5, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Current rpm",
+              font=("Verdana bold", 10)).grid(row=3, column=4, padx=(0, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="New Speed",
+              font=("Verdana bold", 10)).grid(row=5, column=2, padx=(15, 0), pady=10, sticky="w")
+        Label(self, text="New Kg/h",
+              font=("Verdana bold", 10)).grid(row=5, column=3, padx=(10, 0), columnspan=1, pady=10, sticky="w")
+        Label(self, text="New rpm",
+              font=("Verdana bold", 10)).grid(row=5, column=4, padx=(5, 0), columnspan=1, pady=10, sticky="w")
+
+        # Stretcht ratio
+
+        Label(self, text="Stretch Ratio Calculation",
+              font=("Verdana bold", 12)).grid(row=7, column=2, padx=(0, 0), columnspan=5, pady=15, sticky="w")
+        Label(self, text="Source Speed",
+              font=("Verdana bold", 10)).grid(row=8, column=0, padx=(10, 0), pady=5, sticky="w")
+        Label(self, text="Stretch Speed",
+              font=("Verdana bold", 10)).grid(row=8, column=1, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Stretch RATIO",
+              font=("Verdana bold", 10)).grid(row=8, column=2, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Micron Stretch Calculation",
+              font=("Verdana bold", 12)).grid(row=10, column=2, padx=(0, 0), columnspan=5, pady=15, sticky="w")
+        Label(self, text="Set Microns",
+              font=("Verdana bold", 10)).grid(row=11, column=0, padx=(10, 0), pady=5, sticky="w")
+        Label(self, text="Real Microns",
+              font=("Verdana bold", 10)).grid(row=11, column=1, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Current Speed",
+              font=("Verdana bold", 10)).grid(row=11, column=2, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="Stretch RATIO",
+              font=("Verdana bold", 10)).grid(row=11, column=3, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="New Speed",
+              font=("Verdana bold", 10)).grid(row=13, column=2, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+        Label(self, text="New SR",
+              font=("Verdana bold", 10)).grid(row=13, column=3, padx=(10, 0), columnspan=1, pady=5, sticky="w")
+
+        # Text to entry GSM
+        self.gsm = tk.Entry(self, font="Verdana 10 bold",
+                            width=10, justify="center")
+        self.gsm.grid(row=4, column=0, columnspan=1, padx=10,
+                      pady=0, ipady=5, ipadx=0, sticky="w")
+        self.gsm.delete(0, END)
+        self.gsm.insert(0, "15")
+
+        self.realgsm = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center")
+        self.realgsm.grid(row=4, column=1, columnspan=1, padx=10,
+                          pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.speed = tk.Entry(self, font="Verdana 10 bold",
+                              width=10, justify="center")
+        self.speed.grid(row=4, column=2, columnspan=1, padx=10,
+                        pady=0, ipady=5, ipadx=0, sticky="w")
+        self.speed.delete(0, END)
+        self.speed.insert(0, "0")
+
+        self.real_micron = tk.Entry(self, font="Verdana 10 bold",
+                                    width=10, justify="center")
+        self.real_micron.grid(row=12, column=1, columnspan=1, padx=10,
+                              pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.micron = tk.Entry(self, font="Verdana 10 bold",
+                               width=10, justify="center")
+        self.micron.grid(row=12, column=0, columnspan=1, padx=10,
+                         pady=0, ipady=5, ipadx=0, sticky="w")
+        self.micron_ratio = tk.Entry(self, font="Verdana 10 bold",
+                                     width=10, justify="center")
+        self.micron_ratio.grid(row=12, column=3, columnspan=1, padx=10,
+                               pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.kgh = tk.Entry(self, font="Verdana 10 bold",
+                            width=10, justify="center")
+        self.kgh.grid(row=4, column=3, columnspan=1, padx=10,
+                      pady=0, ipady=5, ipadx=0, sticky="w")
+        self.kgh.delete(0, END)
+        self.kgh.insert(0, "0")
+
+        self.rpm = tk.Entry(self, font="Verdana 10 bold",
+                            width=10, justify="center")
+        self.rpm.grid(row=4, column=4, columnspan=1, padx=0,
+                      pady=0, ipady=5, ipadx=0, sticky="w")
+        self.rpm.delete(0, END)
+        self.rpm.insert(0, "0")
+
+        # Results
+        self.Newspeed = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.Newspeed.grid(row=6, column=2, columnspan=1, padx=15,
+                           pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.Newkgh = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.Newkgh.grid(row=6, column=3, columnspan=1, padx=10,
+                         pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.Newrpm = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.Newrpm.grid(row=6, column=4, columnspan=1, padx=0,
+                         pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.Currentspeed1 = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.Currentspeed1.grid(row=12, column=2, columnspan=1, padx=15,
+                                pady=0, ipady=5, ipadx=0, sticky="w")
+        self.Currentspeed1.insert("a", "0")
+        # Results microns
+        self.Newspeed1 = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.Newspeed1.grid(row=14, column=2, columnspan=1, padx=15,
+                            pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.Newratio = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.Newratio.grid(row=14, column=3, columnspan=1, padx=10,
+                           pady=0, ipady=5, ipadx=0, sticky="w")
+
+        # Button calculate
+        self.btnCalculate = tk.Button(self, text="Calculate", font="Verdana 12",
+                                      command=self.calculate_gsm)
+        self.btnCalculate.grid(row=4, column=5, padx=30, pady=0,
+                               ipady=0, ipadx=0, sticky="W")
+        # Button calculate SR
+        self.btnCalculateSR = tk.Button(self, text="Cal. Stretch ratio", font="Verdana 10",
+                                        command=partial(self.calculate_sr, "0"))
+        self.btnCalculateSR.grid(row=9, column=3, padx=5, pady=0,
+                                 ipady=0, ipadx=0, sticky="W")
+        # Button calculate SR1
+        self.btnCalculateSR1 = tk.Button(self, text="Cal. Str. speed", font="Verdana 10",
+                                         command=partial(self.calculate_sr, "1"))
+        self.btnCalculateSR1.grid(row=9, column=4, padx=0, pady=0,
+                                  ipady=0, ipadx=0, sticky="W")
+        # Button calculate SR2
+        self.btnCalculateSR2 = tk.Button(self, text="Cal. Sourc. speed", font="Verdana 10",
+                                         command=partial(self.calculate_sr, "2"))
+        self.btnCalculateSR2.grid(row=9, column=5, padx=5, pady=0,
+                                  ipady=0, ipadx=0, sticky="W")
+        # Button calculate Micron SR
+        self.btnCalculateMSR = tk.Button(self, text="Cal. Str. Ratio", font="Verdana 10",
+                                         command=partial(self.calculate_micron, "1"))
+        self.btnCalculateMSR.grid(row=12, column=5, padx=5, pady=0,
+                                  ipady=0, ipadx=0, sticky="W")
+        # Button calculate Micron Speed
+        self.btnCalculateMS = tk.Button(self, text="Cal. Str. Speed", font="Verdana 10",
+                                        command=partial(self.calculate_micron, "0"))
+        self.btnCalculateMS.grid(row=12, column=4, padx=5, pady=0,
+                                 ipady=0, ipadx=0, sticky="W")
+
+        # Stretch Ratio Results
+        self.SourceSpeed = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center")
+        self.SourceSpeed.grid(row=9, column=0, columnspan=1, padx=15,
+                              pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.SRSpeed = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center")
+        self.SRSpeed.grid(row=9, column=1, columnspan=1, padx=10,
+                          pady=0, ipady=5, ipadx=0, sticky="w")
+
+        self.SR = tk.Entry(
+            self, font="Verdana 10 bold", width=10, justify="center",)
+        self.SR.grid(row=9, column=2, columnspan=1, padx=10,
+                     pady=0, ipady=5, ipadx=0, sticky="w")
+
+    def calculate_gsm(self):
+
+        try:
+            set_gsm = self.gsm.get().replace(",", ".")
+            real_gsm = self.realgsm.get().replace(",", ".")
+            speed = self.speed.get().replace(",", ".")
+            kgh = self.kgh.get().replace(",", ".")
+            rpm = self.rpm.get().replace(",", ".")
+
+            if real_gsm == "0" or real_gsm == "":
+                messagebox.showwarning(
+                    "GSM values", "The GSM value must be bigger than 0 or not empty", parent=self)
+                return
+
+            res = (Decimal(float(speed)) * Decimal(float(real_gsm))) / \
+                Decimal(float(set_gsm))
+
+            self.Newspeed.delete(0, END)
+            self.Newspeed.insert(0, round(res, 2))
+
+            res = (Decimal(float(kgh)) * Decimal(float(set_gsm))) / \
+                Decimal(float(real_gsm))
+
+            self.Newkgh.delete(0, END)
+            self.Newkgh.insert(0, round(res, 2))
+
+            res = (Decimal(float(rpm)) * Decimal(float(set_gsm))) / \
+                Decimal(float(real_gsm))
+
+            self.Newrpm.delete(0, END)
+            self.Newrpm.insert(0, round(res, 2))
+        except:
+            messagebox.showerror(
+                "Values Wrong", "Please, fill with correct values the boxes\nor put 0 before press Calculate button", parent=self)
+
+    def calculate_sr(self, tp):
+
+        source_SR = self.SourceSpeed.get().replace(",", ".")
+        srspeed = self.SRSpeed.get().replace(",", ".")
+        sr_set = self.SR.get().replace(",", ".")
+
+        if tp == "0":
+            if not source_SR.replace(".", "").isdigit() or not srspeed.replace(".", "").isdigit():
+                messagebox.showerror(message="Please, fill with correct values!!",
+                                     title="No valid value", parent=self)
+            else:
+                res = Decimal(float(srspeed)) / Decimal(float(source_SR))
+                self.SR.delete(0, END)
+                self.SR.insert(0, round(res, 2))
+
+        if tp == "1":
+            if not source_SR.replace(".", "").isdigit() or not sr_set.replace(".", "").isdigit():
+                messagebox.showerror(message="Please, fill with correct values!!",
+                                     title="No valid value", parent=self)
+            else:
+                res = Decimal(float(sr_set)) * Decimal(float(source_SR))
+                self.SRSpeed.delete(0, END)
+                self.SRSpeed.insert(0, round(res, 2))
+
+        if tp == "2":
+            if not srspeed.replace(".", "").isdigit() or not sr_set.replace(".", "").isdigit():
+                messagebox.showerror(message="Please, fill with correct values!!",
+                                     title="No valid value", parent=self)
+            else:
+                res = Decimal(float(srspeed)) / Decimal(float(sr_set))
+                self.SourceSpeed.delete(0, END)
+                self.SourceSpeed.insert(0, round(res, 2))
+
+    def calculate_micron(self, tp):
+
+        try:
+            set_micron = self.micron.get().replace(",", ".")
+            real_micron = self.real_micron.get().replace(",", ".")
+            speed_micron = self.Currentspeed1.get().replace(",", ".")
+            stretch_ratio = self.micron_ratio.get().replace(",", ".")
+
+            if real_micron == "0" or real_micron == "" or set_micron == "0" or set_micron == "":
+                messagebox.showwarning(
+                    "Microns values", "The Microns value must be bigger than 0 or not empty", parent=self)
+                return
+
+            if tp == "0":
+
+                res = (Decimal(float(speed_micron)) * Decimal(float(real_micron))) / \
+                    Decimal(float(set_micron))
+                self.Newspeed1.delete(0, END)
+                self.Newspeed1.insert(0, round(res, 2))
+
+            if tp == "1":
+
+                res = (Decimal(float(real_micron)) *
+                       Decimal(float(stretch_ratio)))/Decimal(float(set_micron))
+                self.Newratio.delete(0, END)
+                self.Newratio.insert(0, round(res, 2))
+
+            if tp == "2":
+                res = (Decimal(float(rpm)) * Decimal(float(set_gsm))) / \
+                    Decimal(float(real_gsm))
+
+                self.Newrpm.delete(0, END)
+                self.Newrpm.insert(0, round(res, 2))
+        except:
+            messagebox.showerror(
+                "Values Wrong", "Please, fill with correct values the boxes\nor put 0 before press Calculate button", parent=self)
+
 
 #######  -------- GUI - Start app -------- ######
 
