@@ -1885,7 +1885,7 @@ class Window():
 
     def CheckMFI_DEN(self, name, tip):
         valor = ""
-        mat1 = f'C:\Python\{tip}/{name}.txt'
+        mat1 = rf"C:\Python\{tip}\{name}.txt"
         check_file = os.path.isfile(mat1)
         if check_file == True:
 
@@ -1905,7 +1905,7 @@ class Window():
             if ch2 in mat:
                 mat = mat.replace(ch2, "_")
 
-        mat1 = f'C:\Python\{tip}/{mat}.txt'
+        mat1 = rf'C:\Python\{tip}\{mat}.txt'
         text_file = open(mat1, "w")
         text_file.write(str(valor))
         text_file.close
