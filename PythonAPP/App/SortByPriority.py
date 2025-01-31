@@ -1,16 +1,21 @@
 
+import PDFtoCSV_class
 import datetime
 import stat
 from tkinter import filedialog
+# from openpyxl import load_workbook
 import tkinter as tk
 # import customtkinter as cTk
 from tkinter import *
 import tkinter.ttk as ttk
+# from ttkthemes import ThemedTk
 import os.path
 from tkinter import messagebox
 import xlsxwriter
-import xlrd
+# import xlrd
+import xlrd2 as xlrd
 import copy
+from xlutils.copy import copy as copy2
 import shutil
 from functools import partial
 from tkinter.simpledialog import askfloat
@@ -26,10 +31,10 @@ import sqlite3
 import sys
 import traceback
 import os
+import arrow
+import math
 
 
-# BackUP = []
-# data = ""
 mat = []
 mats = []
 SamplesN = []
@@ -57,6 +62,8 @@ input1 = False
 input2 = False
 LogOpen = False
 text2 = ""
+
+######  --------   SQL ready to use SQL database -----   ######
 
 
 class Sql_Data():
@@ -88,11 +95,11 @@ class Sql_Data():
             print("Successfully Connected to SQLite")
 
             sqlite_insert_query = f"""INSERT INTO db_resin(
-                                  id,                                  
+                                  id,
                                   date,
-                                  resin, 
-                                  mfi, 
-                                  density) 
+                                  resin,
+                                  mfi,
+                                  density)
                                   VALUES (?,{name},{date},{mfi},{density})"""
 
             count = cursor.execute(sqlite_insert_query)
@@ -113,9 +120,9 @@ class Sql_Data():
         try:
             sqliteConnection = sqlite3.connect('SQLite_Lab.db')
             sqlite_create_table_query = '''CREATE TABLE IF NOT EXISTS db_resin (
-                                id INTEGER PRIMARY KEY,                                
-                                date datetime NOT NULL, 
-                                resin VARCHAR(100) NOT NULL UNIQUE,                               
+                                id INTEGER PRIMARY KEY,
+                                date datetime NOT NULL,
+                                resin VARCHAR(100) NOT NULL UNIQUE,
                                 mfi DECIMAL NOT NULL,
                                 density DECIMAL NOT NULL);'''
 
@@ -140,14 +147,17 @@ class Sql_Data():
 #######  -------- GUI - Application SortByPriority -------- ######
 
 
-class Window:
+class Window():
 
     def __init__(self, master):
 
         # Main screen configuration
+
         self.master = master
+        # self.master = ThemedTk(theme="arc")
         self.master.resizable(1, 1)
         self.master.title("Sort By Priority by amanonellas@dow.com")
+        self.master.configure(background=colorWindow)
         # Obtenemos el largo y  ancho de la pantalla
         wtotal = self.master.winfo_screenwidth()
         htotal = self.master.winfo_screenheight()
@@ -163,6 +173,9 @@ class Window:
         self.master.columnconfigure(0, weight=1)  # column with treeview
         self.master.rowconfigure(4, weight=1)  # row with treeview
         self.Label_Engineer = tk.StringVar()
+        self.NumberStudy = tk.StringVar()
+        self.compareBOL = ""
+        self.compareVar = []
 
         # Button Choose file
         self.btn = tk.Button(
@@ -181,29 +194,43 @@ class Window:
                       ipady=0, ipadx=5, sticky="E")
 
         # Text & Label Number of Samples
-        self.labl1 = tk.Label(text="Number of Samples :").grid(
+        self.labl1 = tk.Label(text="Number of Samples :", background=colorLabels).grid(
             row=0, column=3, ipady=5)
-        self.entry3 = tk.Entry(justify='center', width=4, font="Verdana 10")
+
+        self.entry3 = tk.Entry(justify='center', width=4,
+                               font="Verdana 10", background=colorEntrys)
         self.entry3.grid(row=0, column=4, padx=0, pady=0,
                          ipady=3, ipadx=0, sticky="w")
 
         # Combo Samples
+        style = ttk.Style()
+        style.theme_use('alt')
+        style.configure("TCombobox", fieldbackground="sky blue",
+                        background="white")
         self.SamplesCO = ttk.Combobox(
             justify='center', state='readonly', width=15, font="Verdana 10")
         self.SamplesCO.grid(row=0, column=5, padx=0, pady=0,
                             ipady=3, ipadx=0, columnspan=3, sticky="w")
 
         # Button go Sample
-        self.btnGo = tk.Button(text="Go...", command=self.createModal)
+        self.btnGo = tk.Button(
+            text="Go...", command=partial(self.createModal, ""))
         self.btnGo.grid(row=0, column=7, padx=50, pady=0,
                         ipady=0, ipadx=0, sticky="W")
 
+        # Button Excel open
+        self.btnExcel = tk.Button(
+            text="Open Excel", command=partial(self.openExcel, False))
+        self.btnExcel.grid(row=0, column=7, padx=90, pady=0,
+                           ipady=0, ipadx=0, columnspan=7, sticky="W")
+
         # Labels Owner of the Study
-        self.LOwner = tk.Label(text="Engineer :").grid(
-            row=0, column=8)
+        self.LOwner = tk.Label(text="Engineer :", background=colorLabels).grid(
+            row=1, column=7)
+
         self.LOwnerN = tk.Label(textvariable=self.Label_Engineer, font=(
-            "Verdana bold", 14)).grid(
-            row=1, column=6, columnspan=5, padx=0, pady=0, ipady=0, ipadx=60)
+            "Verdana bold", 14), background=colorLabels).grid(
+            row=1, column=7, columnspan=8, padx=0, pady=0, ipady=0, ipadx=30)
 
         # Button Console
         self.btnConsola = tk.Button(text="Console", command=self.Consola)
@@ -211,9 +238,20 @@ class Window:
                              padx=0, pady=0, ipady=0, ipadx=30, sticky="W")
 
         # Text path of the file
-        self.entry = tk.Entry(width=65, font="Verdana 10")
+        self.entry = tk.Entry(width=65, font="Verdana 10",
+                              background="Sky blue")
         self.entry.grid(row=1, column=0, columnspan=7,
                         padx=10, pady=0, ipady=5, ipadx=0, sticky="w")
+
+        # Labels Study number
+        self.lablS = tk.Label(text="Study Nº:", background=colorLabels).grid(
+            row=1, column=3, padx=5, columnspan=7,
+            pady=0, ipady=0, ipadx=4, sticky="w")
+
+        self.lablS1 = tk.Label(textvariable=self.NumberStudy, background=colorLabels, font=(
+            "Verdana bold", 14)).grid(
+            row=1, column=4, padx=5, columnspan=5,
+            pady=0, ipady=0, ipadx=4, sticky="w")
 
         # Button Export Excel file
         self.btn3 = tk.Button(text="Export to EXCEL file",
@@ -221,24 +259,59 @@ class Window:
         self.btn3.grid(row=2, column=0, columnspan=2, padx=10,
                        pady=5, ipady=0, ipadx=0, sticky="w")
 
+        # Button Pressure Rise tools
+        self.Pr = tk.Button(text="PR Tools",
+                            command=self.pressureRise)
+        self.Pr.grid(row=2, column=1, columnspan=4, padx=75,
+                     pady=5, ipady=0, ipadx=0, sticky="w")
+
+        # Button Excel Export
+        self.btnExcelEx = tk.Button(
+            text="Open Excel", command=partial(self.openExcel, True))
+        self.btnExcelEx.grid(row=2, column=0, padx=130, pady=0,
+                             ipady=0, ipadx=0, columnspan=1, sticky="W")
+
         # Button MDO tools
         self.btn4 = tk.Button(text="MDO tools",
                               command=self.mdotools)
-        self.btn4.grid(row=2, column=1, columnspan=3, padx=40,
+        self.btn4.grid(row=2, column=2, columnspan=3, padx=40,
                        pady=5, ipady=0, ipadx=0, sticky="w")
         # Button Datasheet
         self.btn4 = tk.Button(text="DataSheet",
-                              command=self.open_DataSheet)
-        self.btn4.grid(row=2, column=2, columnspan=5, padx=20,
+                              command=partial(self.open_DataSheet, self, "", True))
+        self.btn4.grid(row=2, column=3, columnspan=2, padx=50,
                        pady=5, ipady=0, ipadx=0, sticky="w")
         # Button RawData
         self.btn5 = tk.Button(text="RawData tools",
                               command=self.rawData)
-        self.btn5.grid(row=2, column=3, columnspan=6, padx=30,
+        self.btn5.grid(row=2, column=4, columnspan=3, padx=0,
+                       pady=5, ipady=0, ipadx=0, sticky="w")
+        # Button Templates
+        self.btn5 = tk.Button(text="Upload Templates",
+                              command=self.template)
+        self.btn5.grid(row=2, column=5, columnspan=4, padx=35,
                        pady=5, ipady=0, ipadx=0, sticky="w")
 
+        # Button Sample Expended time
+        self.SET = tk.Button(text="Sample Tools",
+                             command=self.set)
+        self.SET.grid(row=2, column=7, columnspan=5, padx=45,
+                      pady=5, ipady=0, ipadx=0, sticky="w")
+
+        # Button Film Calculations
+        self.thk = tk.Button(text="Film Calculations",
+                             command=self.thk_tools)
+        self.thk.grid(row=2, column=7, columnspan=78, padx=130,
+                      pady=5, ipady=0, ipadx=0, sticky="w")
+        # Button Machine Cameras
+        self.cam = tk.Button(text="Machine Cameras",
+                             command=self.cam_open)
+        self.cam.grid(row=2, column=8, columnspan=78, padx=85,
+                      pady=5, ipady=0, ipadx=0, sticky="w")
+
         # Text to entry EXCEL name
-        self.entry1 = tk.Entry(font="Verdana 10", width=15)
+        self.entry1 = tk.Entry(
+            font="Verdana 10", width=15, background="Sky blue")
         self.entry1.grid(row=3, column=0, columnspan=2, padx=10,
                          pady=0, ipady=5, ipadx=0, sticky="w")
 
@@ -263,7 +336,7 @@ class Window:
         self.EntryMelt.set("High")
 
         # Label & Text Layer number
-        self.labl = tk.Label(text="Layer :").grid(
+        self.labl = tk.Label(text="Layer :", background=colorLabels).grid(
             row=3, column=5, padx=5,
             pady=0, ipady=0, ipadx=4, sticky="w")
         self.InterEntry = ttk.Combobox(
@@ -275,16 +348,23 @@ class Window:
         self.InterEntry.set("1")
 
         # Label & Text Materials
-        self.res = tk.Label(text="Resin & Additive :").grid(
+        self.res = tk.Label(text="Resin & Additive :", background=colorLabels).grid(
             row=3, column=7,  padx=25,
             pady=5, ipady=0, ipadx=0, sticky="w")
-        self.Materials = ttk.Combobox(justify='center', state='readonly')
+        self.Materials = ttk.Combobox(
+            justify='center', state='readonly', background=colorLabels)
         self.Materials.grid(row=3, column=8, padx=0,
                             pady=0, ipady=3, ipadx=40)
         self.btn4 = tk.Button(text="Sort by Resin ...",
                               command=partial(self.SortBy, "Resin"))
         self.btn4.grid(row=3, column=10, padx=3,
                        pady=0, ipady=0, ipadx=0)
+
+        # Button All Resins
+        self.btnRes = tk.Button(text="Show Resins ...",
+                                command=self.resins)
+        self.btnRes.grid(row=2, column=10, padx=3,
+                         pady=0, ipady=0, ipadx=0)
 
         # Treeview Samples
         self.tree = ttk.Treeview(
@@ -295,27 +375,475 @@ class Window:
         self.CreateTable()
 
         self.firstOPen = False
+        self.Oldsample = ""
 
-    def rawData(self):
+    def pressureRise(self):
+        root = tk.Toplevel()
+        PDFtoCSV_class.PDftoexcel(root)
+        return
+
+    #### Cam tools ###
+
+    def cam_open(self):
+
+        newtk = tk.Toplevel()
+        newtk.resizable(0, 0)
+        newtk.title("Machinery Cams")
+        wtotal = newtk.winfo_screenwidth()
+        htotal = newtk.winfo_screenheight()
+        # Guardamos el largo y alto de la ventana
+        wventana = 800
+        hventana = 500
+        # Aplicamos la siguiente formula para calcular donde debería posicionarse
+        pwidth = round(wtotal/2-wventana/2)
+        pheight = round(htotal/2-hventana/2)
+        # Se lo aplicamos a la geometría de la ventana
+        newtk.geometry(str(wventana)+"x"+str(hventana) +
+                       "+"+str(pwidth)+"+"+str(pheight))
+        newtk.focus()
+        newtk.grab_set()
+
+        dis = [125, 250, 370, 485]
+        dis1 = -1
+        cams_n = []
+        cams = ['Macchi', 'Blown 9 Layers', 'Tecom', 'Mdo', 'Dolci']
+        self.camsB = []
+
+        c = 0
+        d = 0
+
+        for fl in cams:
+            cams_n.append(tk.IntVar(value=0))
+            btn = tk.Button(newtk, text=str(
+                fl), command=partial(self.open_cam_now, newtk, fl), font="Verdana 12")
+            btn.pack()
+            self.camsB.append(btn)
+            btn.place(x=40+d, y=60+c)
+
+            c = c + 40
+            if c == 330:
+                dis1 = dis1 + 1
+                d = int(dis[dis1])
+                c = 0
+
+    def open_cam_now(self, wn, Cam_Name):
+
+        if Cam_Name == "Macchi":
+            webbrowser.open('https://tgq02.dow.com/axis-cgi/mjpg/video.cgi')
+            webbrowser.open('https://tgq04.dow.com/axis-cgi/mjpg/video.cgi')
+
+        if Cam_Name == "Tecom":
+            webbrowser.open('https://tgq03.dow.com/axis-cgi/mjpg/video.cgi')
+            webbrowser.open('https://tgq01.dow.com/axis-cgi/mjpg/video.cgi')
+
+        if Cam_Name == "Dolci":
+            webbrowser.open('https://tgp01.dow.com/axis-cgi/mjpg/video.cgi')
+
+        if Cam_Name == "Blown 9 Layers":
+            webbrowser.open('https://tgp02.dow.com/axis-cgi/mjpg/video.cgi')
+
+    #### Thickness Tools ####
+
+    def thk_tools(self):
+
+        newtk = tk.Toplevel()
+        newtk.resizable(0, 0)
+        newtk.title("Film Calculations")
+        wtotal = newtk.winfo_screenwidth()
+        htotal = newtk.winfo_screenheight()
+        # Guardamos el largo y alto de la ventana
+        wventana = 800
+        hventana = 500
+        # Aplicamos la siguiente formula para calcular donde debería posicionarse
+        pwidth = round(wtotal/2-wventana/2)
+        pheight = round(htotal/2-hventana/2)
+        # Se lo aplicamos a la geometría de la ventana
+        newtk.geometry(str(wventana)+"x"+str(hventana) +
+                       "+"+str(pwidth)+"+"+str(pheight))
+        newtk.focus()
+        newtk.grab_set()
+
+        labels_thk = ["m/min", "microns", "kg/h", "B.U.R.", "LayFlat", "width"]
+        entrys_thk = ["entr_0", "entr_1",
+                      "entr_2", "entr_3", "entr_4", "entr_5"]
+        entrys_thk_name = []
+        entrys_thk_name.clear()
+        buttons_thk = ["rpm", "mic", "kgh", "bur", "layflat", "width"]
+        buttons_thk_name = []
+        buttons_thk_name.clear()
+        entrys_new_thk = ["new_0", "new_1", "new_2", "new_3", "new_4", "new_5"]
+        entrys_new_thk_name = []
+        entrys_new_thk_name.clear()
+
+        Label(newtk, text="Film Calculations", font=("Verdana bold", 18)).place(
+            x=280, y=30)
+        Label(newtk, text="Die Diameter", font=("Verdana bold", 16)).place(
+            x=60, y=250)
+        die = Entry(newtk, text="Bur_die", font=("Verdana bold", 18),
+                    width=5, justify='center')
+        die.delete(0, END)
+        die.insert(0, "100")
+        die.place(x=60, y=290)
+
+        Label(newtk, text="Density resin", font=("Verdana bold", 16)).place(
+            x=300, y=250)
+        density = Entry(newtk, text="density", font=("Verdana bold", 18),
+                        width=5, justify='center')
+        density.delete(0, END)
+        density.insert(0, "0.965")
+        density.place(x=300, y=290)
+
+        Label(newtk, text="Current Line Speed", font=("Verdana bold", 16)).place(
+            x=60, y=330)
+        speed = Entry(newtk, text="Speed_line", font=("Verdana bold", 18),
+                      width=5, justify='center')
+        speed.delete(0, END)
+        speed.insert(0, "0")
+        speed.place(x=60, y=365)
+
+        su = 0
+        for la in labels_thk:
+            lab = Label(newtk, text=la, font=("Verdana bold", 12)).place(
+                x=70 + su, y=90)
+            su = su + 120
+        su = 0
+        for la in entrys_thk:
+            en = Entry(newtk, text=la, font=("Verdana bold", 16),
+                       width=7, justify='center')
+            en.place(x=50 + su, y=120)
+            su = su + 120
+            entrys_thk_name.append(en)
+        su = 0
+        for la in buttons_thk:
+            bu = Button(newtk, text="NEW", font=("Verdana bold", 14), command=partial(self.thk_Calculations,
+                                                                                      newtk, la, entrys_thk_name, entrys_new_thk_name, buttons_thk_name, die, speed)).place(x=70 + su, y=150)
+            su = su + 120
+            buttons_thk_name.append(bu)
+        bu = Button(newtk, text="Clear All", font=("Verdana bold", 14), command=partial(self.thk_Calculations,
+                                                                                        newtk, "Clear All", entrys_thk_name, entrys_new_thk_name, buttons_thk_name, die, speed)).place(x=70, y=450)
+        buttons_thk_name.append(bu)
+        su = 0
+
+        for la in entrys_new_thk:
+            en = Entry(newtk, text=la, font=("Verdana bold", 16),
+                       width=7, justify='center')
+            en.place(x=50 + su, y=200)
+            su = su + 120
+            entrys_new_thk_name.append(en)
+
+    def thk_Calculations(self, wn, parameter, entry_text, entry_new, buttons, die, speed):
+
+        if parameter == "Clear All":
+            for e in entry_text:
+                e.delete(0, END)
+            for e in entry_new:
+                e.delete(0, END)
+            return
+
+        pa = False
+        width_n = entry_text[5].get().replace(",", ".")
+        bur = entry_text[3].get().replace(",", ".")
+        die_name = die.get().replace(",", ".")
+        rpm = entry_text[0].get().replace(",", ".")
+        mic = entry_text[1].get().replace(",", ".")
+        speed = speed.get().replace(",", ".")
+
+        if parameter == "bur" or parameter == "width":
+
+            if (width_n.isdigit and width_n != ""):
+                pa = True
+            else:
+                if parameter == "bur":
+                    pa = False
+                    entry_text[5].focus()
+                    msg = messagebox.showwarning(
+                        "Film Width", "Please fill the box Width\nwith the correct value in mm", icon="warning", parent=wn)
+                    return
+
+            if die_name.isdigit and die_name != "":
+                pa = True
+            else:
+                pa = False
+                die.focus()
+                msg = messagebox.showwarning(
+                    "Die Diameter", "Please fill the box Die diameter\nwith the correct value in mm", icon="warning", parent=wn)
+                return
+            if bur.isdigit and bur != "":
+                pa = True
+            else:
+                if parameter == "width":
+                    pa = False
+                    entry_text[3].focus()
+                    msg = messagebox.showwarning(
+                        "BUR value", "Please fill the box BUR\nwith the correct BUR value", icon="warning", parent=wn)
+                    return
+            if pa == True and parameter == "bur":
+                new_bur = round((0.637 * int(width_n)/int(die_name)), 2)
+                entry_new[3].delete(0, END)
+                entry_new[3].insert(0, new_bur)
+                return
+
+            if pa == True and parameter == "width":
+                new_width = math.ceil(float(bur)/0.637 * int(die_name))
+                entry_new[5].delete(0, END)
+                entry_new[5].insert(0, new_width)
+                return
+
+        if parameter == "mic":
+            rpm_bool = False
+
+            if mic.isdigit and mic != "":
+                rpm_bool = True
+            else:
+                rpm_bool = False
+                entry_text[1].focus()
+                msg = messagebox.showwarning(
+                    "Microns adjustment", "Please fill the box microns\nwith the current value", icon="warning", parent=wn)
+                return
+            if rpm.isdigit and rpm != "":
+                rpm_bool = True
+            else:
+                rpm_bool = False
+                entry_text[0].focus()
+                msg = messagebox.showwarning(
+                    "Microns adjustment", "Please fill the box m/min\nwith the current value in m/min", icon="warning", parent=wn)
+                return
+
+            if rpm_bool == True:
+                msg_mic = askinteger("Microns to adjust",
+                                     "Please, enter the microns that you want to adjust ")
+                new_mic = Decimal((float(rpm) * float(mic)/msg_mic))
+                entry_new[0].delete(0, END)
+                new_mic = "{:.1f}".format(new_mic)
+                entry_new[0].insert(0, str(new_mic))
+                entry_new[1].delete(0, END)
+                msg_mic = "{:.1f}".format(msg_mic)
+                entry_new[1].insert(0, str(msg_mic))
+                entry_new[0].focus()
+                return
+
+        if parameter == "rpm":
+            mic_bool = False
+            msg_mm = messagebox.askyesno(
+                "Current Line speed", "Do you want to use the Current Line speed?", parent=wn)
+            if msg_mm == True:
+                rpm = speed
+                entry_text[0].delete(0, END)
+                entry_text[0].insert(0, str(rpm))
+            if rpm.isdigit and rpm != "":
+                mic_bool = True
+            else:
+                mic_bool = False
+                entry_text[0].focus()
+                msg = messagebox.showwarning(
+                    "Speed adjustment", "Please fill the box m/min\nwith the current value in m/min", icon="warning", parent=wn)
+                return
+
+            if mic.isdigit and mic != "":
+                mic_bool = True
+            else:
+                mic_bool = False
+                entry_text[1].focus()
+                msg = messagebox.showwarning(
+                    "Speed adjustment", "Please fill the box microns\nwith the current value", icon="warning", parent=wn)
+                return
+
+            if mic_bool == True:
+                msg_rpm = askfloat("Speed to adjust",
+                                   "Please, enter the speed(rpm) that you want to set")
+                new_rpm = Decimal((float(mic) * float(rpm)/msg_rpm))
+                entry_new[1].delete(0, END)
+                new_rpm = "{:.1f}".format(new_rpm)
+                entry_new[1].insert(0, str(new_rpm))
+                entry_new[0].delete(0, END)
+                new_rpm = "{:.1f}".format(msg_rpm)
+                entry_new[0].insert(0, str(msg_rpm))
+                return
+
+    #### Show Resins&Additives ####
+
+    def resins(self):
+
+        if len(SamplesN) == 0:
+            messagebox.showinfo(
+                "Study Materials", "Please, open some Study first.")
+            return
+
+        newtk = tk.Toplevel()
+        newtk.resizable(0, 0)
+        newtk.title("Materials of the Study")
+        wtotal = newtk.winfo_screenwidth()
+        htotal = newtk.winfo_screenheight()
+        # Guardamos el largo y alto de la ventana
+        wventana = 800
+        hventana = 500
+        # Aplicamos la siguiente formula para calcular donde debería posicionarse
+        pwidth = round(wtotal/2-wventana/2)
+        pheight = round(htotal/2-hventana/2)
+        # Se lo aplicamos a la geometría de la ventana
+        newtk.geometry(str(wventana)+"x"+str(hventana) +
+                       "+"+str(pwidth)+"+"+str(pheight))
+        newtk.focus()
+        newtk.grab_set()
+        msg1 = []
+        msgpath = self.entry.get().replace(".xlsx", "")
+        msg1 = msgpath.split("/")
+        nl = len(msg1) - 1
+        msg = msg1[nl]
+        checBoxes = []
+        Label(newtk, text=f"Materials of the STUDY {msg} ", font=("Verdana bold", 16)).place(
+            x=225, y=10)
+        Button(newtk, text=f"DataSheet", font=("Verdana bold", 12), command=partial(self.show_Datasheet, newtk, checBoxes, mat)).place(
+            x=220, y=450)
+        Button(newtk, text=f"Temp Profile", font=("Verdana bold", 12),
+               command=partial(self.show_temp, newtk, checBoxes, mat)).place(x=360, y=450)
+        c = 0
+
+        for fl in mat:
+            checBoxes.append(tk.IntVar(value=0))
+            tk.Checkbutton(newtk, text=str(
+                fl), variable=checBoxes[-1], onvalue=1, offvalue=0, font="Verdana 12").place(x=40, y=60+c)
+            c = c + 22
+            # If row is out of range
+
+    #### Show Temperature Profile ####
+
+    def show_temp(self, wn, data, data1):
+
+        result = [ing for ing, cb in zip(data1, data) if cb.get() > 0]
+        if len(result) > 1:
+            tk.messagebox.showinfo(
+                "Temp profile", "Please, select only one resine", parent=wn)
+            return
+        else:
+            msg = result[0]
+
+        newtk = tk.Toplevel()
+        newtk.resizable(0, 0)
+        newtk.title("Profile Temp. recomended")
+        wtotal = newtk.winfo_screenwidth()
+        htotal = newtk.winfo_screenheight()
+        # Guardamos el largo y alto de la ventana
+        wventana = 800
+        hventana = 500
+        # Aplicamos la siguiente formula para calcular donde debería posicionarse
+        pwidth = round(wtotal/2-wventana/2)
+        pheight = round(htotal/2-hventana/2)
+        # Se lo aplicamos a la geometría de la ventana
+        newtk.geometry(str(wventana)+"x"+str(hventana) +
+                       "+"+str(pwidth)+"+"+str(pheight))
+        newtk.focus()
+        newtk.grab_set()
+
+        Label(newtk, text=f"{msg}", font=("Verdana bold", 16)).place(
+            x=140, y=10)
+        Label(newtk, text=f"Feeding Temperatures", font=("Verdana", 16)).place(
+            x=50, y=70)
+        Label(newtk, text=f"Extruder Zones Temperatures", font=("Verdana", 16)).place(
+            x=50, y=155)
+        Label(newtk, text=f"Adapters Temperatures", font=("Verdana", 16)).place(
+            x=50, y=245)
+        Label(newtk, text=f"Die Head Temperatures", font=("Verdana", 16)).place(
+            x=50, y=330)
+        Button(newtk, text=f"Comments", font=("Verdana", 12), command=partial(self.show_Comments, msg)).place(
+            x=350, y=450)
+
+        ##### Llegir temp de fitxer de text #####
+        path_temp = "C:/Python/Temp/Temp.txt"
+        _temp = False
+        with open(path_temp) as f:
+            for line in f.readlines():
+                match1 = line.split(";")
+                if match1[0] in msg:
+                    _temp = True
+                    cn = " °C "
+                    break
+        f.close
+        if _temp == False:
+            send = (
+                ";No Data;No Data;;;;;No Data;No Data")
+            cn = ""
+            match1 = send.split(";")
+
+        label_Feed = tk.Label(
+            newtk, text=match1[1] + cn, font=("Verdana bold", 18))
+        label_Feed.place(x=50, y=105)
+        label_Zones = tk.Label(
+            newtk, text=match1[2] + cn, font=("Verdana bold", 18))
+        label_Zones.place(x=50, y=195)
+        label_Zones = tk.Label(
+            newtk, text=match1[3] + cn, font=("Verdana bold", 18))
+        label_Zones.place(x=160, y=195)
+        label_Zones = tk.Label(
+            newtk, text=match1[4] + cn, font=("Verdana bold", 18))
+        label_Zones.place(x=265, y=195)
+        label_Zones = tk.Label(
+            newtk, text=match1[5] + cn, font=("Verdana bold", 18))
+        label_Zones.place(x=375, y=195)
+        label_Zones = tk.Label(
+            newtk, text=match1[6] + cn, font=("Verdana bold", 18))
+        label_Zones.place(x=485, y=195)
+        label_Adapt = tk.Label(
+            newtk, text=match1[7] + cn, font=("Verdana bold", 18))
+        label_Adapt.place(x=50, y=280)
+        label_Die = tk.Label(
+            newtk, text=match1[8].strip() + cn, font=("Verdana bold", 18))
+        label_Die.place(x=50, y=365)
+
+    #### Show comments of material ####
+
+    def show_Comments(self, msg=""):
+        path_comment = "C:/Python/Comments/" + msg + ".txt"
+        # ShowCommnets.Open_text(self, None, path_comment)
+
+    #### Raw Data ####
+
+    def rawData(self, open=False, msg="", open1=False):
 
         today = datetime.date.today()
         year = today.year
         gipnpath = "//tgnt01/g-tg-plastic/Laboratory/LIMS/LIMS Upload"
-
-        msg = tk.simpledialog.askinteger(
-            "RAW DATA TOOLS", "-               Please, enter the STUDY NUMBER                   -")
-        if msg == "" or msg == None:
-            return
-
         rawdatapath_main = f"//tnnt02/ptc2/Nautilus/GLIMS_Raw_Data/{str(year)}"
+        msgb = ""
+
+        if open == False:
+
+            msg = tk.simpledialog.askinteger(
+                "RAW DATA TOOLS", "-               Please, enter the STUDY NUMBER                   -")
+            self.StudyNumberIn = msg
+            if msg == None:
+                msgb = tk.messagebox.askquestion(
+                    "Raw Data Tools", f"Do you want to open the RaWData folder?", icon="info")
+                if msgb == "yes":
+                    webbrowser.open(str("file:") + rawdatapath_main)
+                    return
+                else:
+                    return
 
         rawdatapath = "//tnnt02/ptc2/Nautilus/GLIMS_Raw_Data/" + \
             str(year) + "/Study_" + str(msg) + "/Tarragona TSD Fabrication Lab"
 
-        if os.path.isdir(rawdatapath):
-            with os.scandir(rawdatapath) as ficheros:
-                ficheros = [
-                    fichero.name for fichero in ficheros if fichero.is_file()]
+        if open == False:
+            if os.path.isdir(rawdatapath):
+                with os.scandir(rawdatapath) as ficheros:
+                    ficheros = [
+                        fichero.name for fichero in ficheros if fichero.is_file()]
+            else:
+                tk.messagebox.showerror(
+                    "Checking Study", f"This Study - {msg} - isn't in the RawData folder", icon="warning")
+                msgb2 = tk.messagebox.askquestion(
+                    "Study not found", f"Do you want to open the RawData folder?", icon="info")
+                if msgb2 == "yes":
+                    webbrowser.open(str("file:") + rawdatapath_main)
+                    return
+            if len(ficheros) == 0:
+                tk.messagebox.showinfo(
+                    "Study found", f"This study {msg} is on the RawData.\nBut there are not file/s there\nAnything to pass to GIPN")
+                msgb2 = tk.messagebox.askquestion(
+                    "Samples not found", f"Do you want to open the folder of this Study?", icon="info")
+                if msgb2 == "yes":
+                    webbrowser.open(str("file:") + rawdatapath)
+                    return
             if len(ficheros) > 0:
                 msgb = tk.messagebox.askquestion(
                     "Study found", f"This study {msg} is on the RawData.\nAnd there are {len(ficheros)} file/s \nDo you want to pass all of them to GIPN?")
@@ -332,71 +860,541 @@ class Window:
                 else:
                     msgb = tk.messagebox.askquestion(
                         "Study found", f"Do you want to select the files to pass to GIPN?", icon="info")
-                if msgb == "yes":
-                    newtk = tk.Toplevel()  # 416673
-                    newtk.resizable(0, 0)
-                    newtk.title("Files on the Raw Data Study Folder")
-                    wtotal = newtk.winfo_screenwidth()
-                    htotal = newtk.winfo_screenheight()
-                    # Guardamos el largo y alto de la ventana
-                    wventana = 800
-                    hventana = 500
-                    # Aplicamos la siguiente formula para calcular donde debería posicionarse
-                    pwidth = round(wtotal/2-wventana/2)
-                    pheight = round(htotal/2-hventana/2)
-                    # Se lo aplicamos a la geometría de la ventana
-                    newtk.geometry(str(wventana)+"x"+str(hventana) +
-                                   "+"+str(pwidth)+"+"+str(pheight))
-                    newtk.focus()
-                    newtk.grab_set()
-                    variables = []
-                    c = 0
-                    self.data = ""
-                    Label(newtk, text=f"Files of the STUDY {msg} ", font=("Verdana bold", 16)).place(
-                        x=230, y=10)
-                    Button(newtk, text=f"Copy to GIPN", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath)).place(
-                        x=330, y=450)
 
-                    for fl in ficheros:
-                        variables.append(tk.IntVar(value=0))
-                        tk.Checkbutton(newtk, text=str(
-                            fl), variable=variables[-1], onvalue=1, offvalue=0, font="Verdana 12").place(x=40, y=60+c)
-                        c = c + 22
-                        # If row is out of range
+        if open == True:
+            with os.scandir(rawdatapath) as ficheros:
+                ficheros = [
+                    fichero.name for fichero in ficheros if fichero.is_file()]
+
+        if msgb == "yes" or open == True:
+            newtk = tk.Toplevel()
+            newtk.resizable(0, 0)
+            newtk.title("Files on the Raw Data Study Folder")
+            wtotal = newtk.winfo_screenwidth()
+            htotal = newtk.winfo_screenheight()
+            # Guardamos el largo y alto de la ventana
+            wventana = 800
+            hventana = 500
+            # Aplicamos la siguiente formula para calcular donde debería posicionarse
+            pwidth = round(wtotal/2-wventana/2)
+            pheight = round(htotal/2-hventana/2)
+            # Se lo aplicamos a la geometría de la ventana
+            newtk.geometry(str(wventana)+"x"+str(hventana) +
+                           "+"+str(pwidth)+"+"+str(pheight))
+            newtk.focus()
+            newtk.grab_set()
+            variables = []
+            c = 0
+            h = 0
+            self.data = ""
+
+            Label(newtk, text=f"Files of the STUDY {msg} ", font=("Verdana bold", 16)).place(
+                x=175, y=10)
+            Button(newtk, text=f"Copy to GIPN", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 0)).place(
+                x=150, y=450)
+            Button(newtk, text=f"...", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 4)).place(
+                x=285, y=450)
+            Button(newtk, text=f"Open file/s", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 2)).place(
+                x=325, y=450)
+            Button(newtk, text=f"Change ID", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 3)).place(
+                x=450, y=450)
+            Button(newtk, text=f"Select ALL", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 1)).place(
+                x=25, y=450)
+            Button(newtk, text=f"Copy&Change", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 5)).place(
+                x=570, y=450)
+            Button(newtk, text=f"Del", font=("Verdana bold", 12), command=partial(self.save_gipn, newtk, ficheros, variables, rawdatapath, gipnpath, 6)).place(
+                x=720, y=450)
+
+            for fl in ficheros:
+                chk = False
+                if fl == open1:
+                    chk = True
+                    open1 = False
+                variables.append(tk.IntVar(value=chk))
+                if os.path.isfile(str(gipnpath + "/" + fl)):
+                    bgconfig = "red"
                 else:
-                    msgb = tk.messagebox.askquestion(
-                        "Study found", f"Do you want to open the RaWData folder?", icon="info")
-                    if msgb == "yes":
-                        webbrowser.open(str("file:") + rawdatapath)
+                    bgconfig = "black"
 
+                tk.Checkbutton(newtk, text=str(
+                    fl), variable=variables[-1], fg=bgconfig, onvalue=1, offvalue=0, font="Verdana 12").place(x=40+h, y=60+c)
+
+                c = c + 22
+                if c == 374:
+                    c = 0
+                    h = 310
+
+        if msgb == "no":
+            msgb2 = tk.messagebox.askquestion(
+                "Study not found", f"Do you want to open the folder of this Study?", icon="info")
+            if msgb2 == "yes":
+                webbrowser.open(str("file:") + rawdatapath)
+                return
+        if open == True and open1 == False:
+            msg = tk.messagebox.askquestion(
+                "Excel Study created", f"Do you want to change the Sample number and ID?", parent=newtk)
+            if msg == "yes":
+                self.save_gipn(newtk, ficheros, variables,
+                               rawdatapath, gipnpath, 3)
+
+    #### Sample tools ####
+
+    def goall(self, wn, data, data1, comp=False):
+
+        result = [ing for ing, cb in zip(data1, data) if cb.get() > 0]
+        if len(result) == 0:
+            tk.messagebox.showinfo(
+                "Sample Tools", "Please, select some sample", parent=wn)
         else:
-            tk.messagebox.showerror(
-                "Checking Study", f"This Study - {msg} - isn't in the RawData folder", icon="warning")
-            msgb = tk.messagebox.askquestion(
-                "Study not found", f"Do you want to open the RawData folder?", icon="info")
-            if msgb == "yes":
-                webbrowser.open(str("file:") + rawdatapath_main)
+            adj = 0
+            for sn in result:
+                self.createModal(sn, comp, adj)
+                adj = adj - 30
+            wn.destroy()
 
-    def save_gipn(self, wn, data, data1, rawdatapath, gipnpath):
+    def set2(self, wn):
+        wn.destroy()
+        self.open_file()
+        self.set()
+
+    def set(self):
+
+        samples = [self.SamplesCO["values"][i]
+                   for i in range(len(self.SamplesCO["values"]))]
+
+        if len(samples) == 0:
+            tk.messagebox.showinfo(
+                "Sample Tools", "Please, open the file first")
+            return
+
+        newtk = tk.Toplevel()  # 416673
+        newtk.resizable(0, 0)
+        newtk.title("Samples to Control")
+        wtotal = newtk.winfo_screenwidth()
+        htotal = newtk.winfo_screenheight()
+        # Guardamos el largo y alto de la ventana
+        wventana = 800
+        hventana = 500
+        # Aplicamos la siguiente formula para calcular donde debería posicionarse
+        pwidth = round(wtotal/2-wventana/2)
+        pheight = round(htotal/2-hventana/2)
+        # Se lo aplicamos a la geometría de la ventana
+        newtk.geometry(str(wventana)+"x"+str(hventana) +
+                       "+"+str(pwidth)+"+"+str(pheight))
+        newtk.focus()
+        newtk.grab_set()
+        spl_name = str(self.entry.get()).split("/")
+        spl_name = str(spl_name[len(spl_name)-1]).split(".")
+        spl_name = spl_name[0]
+        samples_n = []
+        self.btn_text = tk.StringVar()
+        self.btnSample = tk.StringVar()
+        self.btnAllSample = tk.StringVar()
+        self.btnCompare = tk.StringVar()
+        self.chkColor = "black"
+        self.btn_text.set("Select All")
+        self.btnSample.set(f"Samples of the STUDY {spl_name}")
+        self.btnAllSample.set(f"All Samples")
+        self.btnCompare.set("Compare Samples")
+
+        Label(newtk, textvariable=self.btnSample, font=("Verdana bold", 16)).place(
+            x=180, y=10)
+        Button(newtk, textvariable=self.btn_text, font=(
+            "Verdana bold", 12), command=partial(self.selectAll, samples_n)).place(x=20, y=450)
+        Button(newtk, text=f"Filter Sample", font=("Verdana bold", 12), command=partial(
+            self.filter_sample, newtk, samples_n, samples)).place(x=145, y=450)
+        Button(newtk,  textvariable=self.btnAllSample, font=(
+            "Verdana bold", 12), command=partial(self.set2, newtk)).place(x=285, y=450)
+        Button(newtk,  text="Open Samples", font=(
+            "Verdana bold", 12), command=partial(self.goall, newtk, samples_n, samples)).place(x=445, y=450)
+        Button(newtk,  textvariable=self.btnCompare, font=(
+            "Verdana bold", 12), command=partial(self.compare, newtk, samples_n, samples)).place(x=595, y=450)
+
+        c = 0
+        d = 0
+
+        self.btnSample.set(f"Samples of the STUDY {spl_name} ({len(samples)})")
+        self.btnAllSample.set(f"All Samples ({self.InitialSamples})")
+        self.chkbox = []
+        dis = [125, 250, 370, 485]
+        dis1 = -1
+
+        for fl in samples:
+            samples_n.append(tk.IntVar(value=0))
+            chk = tk.Checkbutton(newtk, text=str(
+                fl), variable=samples_n[-1], onvalue=1, offvalue=0, fg=str(self.chkColor), command=partial(self.cb, newtk, samples_n, samples, fl), font="Verdana 12")
+            chk.pack()
+            self.chkbox.append(chk)
+            chk.place(x=40+d, y=60+c)
+
+            c = c + 22
+            if c == 330:
+                dis1 = dis1 + 1
+                d = int(dis[dis1])
+                c = 0
+
+    #### Compare Tools ####
+
+    def cb(self, wn, data, data1, co=""):
+
+        if self.compareBOL == "Master":
+            result = [ing for ing, cb in zip(data1, data) if cb.get() > 0]
+            if len(result) > 1:
+                tk.messagebox.showinfo(
+                    "Sample Tools", "Please, select only want first", parent=wn)
+            else:
+
+                self.compareVar.append(result[0])
+                for a, cb1 in enumerate(self.chkbox):
+                    if cb1.cget('text') == co:
+                        cb1.config(fg="green")
+                        break
+                tk.messagebox.showinfo(
+                    "Sample Tools", "Please, select now the samples to compare", parent=wn)
+                self.compareBOL = "Samples"
+                return
+        if self.compareBOL == "Samples":
+
+            if self.compareVar[0] == co:
+                msgb = tk.messagebox.askquestion(
+                    "Sample comparation", f"This Sample {co} is used as main Sample to compare\nDo you want to start the comparation again?", parent=wn)
+                if msgb == "no":
+                    for a, cb1 in enumerate(data1):
+                        if cb1 == co:
+                            data[a].set(True)
+                            break
+
+                else:
+                    self.compareBOL = ""
+                    self.btnCompare.set("Compare Samples")
+                    self.compareVar.clear()
+                    for a, cb1 in enumerate(self.chkbox):
+                        cb1.config(fg="black")
+                    self.selectAll(data, True)
+                    return
+            temp = self.compareVar[0]
+            self.compareVar.clear()
+            self.compareVar.append(temp)
+
+            for a, cb1 in enumerate(self.chkbox):
+
+                if cb1.cget('text') == co and cb1.cget('text') != self.compareVar[0]:
+                    if cb1.cget('fg') == "red":
+                        cb1.config(fg="black")
+                    else:
+                        cb1.config(fg="red")
+
+            result = [ing for ing, cb in zip(data1, data) if cb.get() > 0]
+            for items in result:
+                if items not in self.compareVar:
+                    self.compareVar.append(items)
+                    self.btnCompare.set("Ready to Compare")
+
+    def compare(self, wn, data, data1):
+
+        if self.btnCompare.get() == "Ready to Compare":
+            if len(self.compareVar) == 1:
+                tk.messagebox.showinfo(
+                    "Sample Tools", "Please, select other samples to compare", parent=wn)
+                return
+            for a, cb1 in enumerate(self.chkbox):
+                cb1.config(fg="black")
+            self.compareTool(wn, self.compareVar, data, data1)
+            return
+
+        tk.messagebox.showinfo(
+            "Sample Tools", "Please, select the main sample(1) that you want to compare", parent=wn)
+        self.compareBOL = "Master"
+        self.selectAll(data, True)
+
+    def compareTool(self, wn, ListSamples, data, data1):
+        self.totalSamples = ListSamples
+        mainlist = []
+        mainlist.clear()
+
+        for list1 in self.DatoStudy:
+            if ListSamples[0] in list1:
+                mainlist.append(list1)
+        compareList = []
+
+        for index in range(len(ListSamples)-1):
+
+            flag = 0
+            n1 = 0
+
+            for itemList in mainlist:
+                n = -1
+                n1 = n1 + 1
+                for list1 in self.DatoStudy:
+
+                    n = n+1
+                    flag1 = False
+                    if ListSamples[index+1] in list1 and itemList[1] == list1[1] and n not in compareList:
+                        flag = 0
+                        k = 0
+                        for item in itemList:
+                            # if itemList[1] == list1[1]:
+                            if flag == 1:
+                                if item != list1[k]:
+                                    list1[8] = "red"
+                                    print(list1)
+                                    flag1 = True
+                                    compareList.append(n)
+                                    break
+                            k = k + 1
+                            flag = 1
+
+                        if flag1 == False:  # and itemList[1] == list1[1]
+                            list1[8] = "green"
+                            compareList.append(n)
+                            print(list1)
+                            break
+                        else:
+                            break
+                    else:
+                        if ListSamples[index+1] in list1 and n not in compareList and n1 > len(mainlist):
+                            list1[8] = "red"
+                            print(list1)
+                            compareList.append(n)
+                            break
+            for list1 in self.DatoStudy:
+                if ListSamples[index+1] in list1 and list1[8] == "False":
+                    list1[8] = "cyan"
+                    print(list1)
+
+        self.compareBOL = ""
+        self.btnCompare.set("Compare Samples")
+
+        self.goall(wn, data, data1, True)
+
+        for index in self.totalSamples:
+            for sam in self.DatoStudy:
+                if index in sam:
+                    sam[8] = "False"
+        self.compareVar.clear()
+
+    #### Filter Sample ####
+
+    def filter_sample(self, window, data, data1):
+
+        result = [ing for ing, cb in zip(data1, data) if cb.get() > 0]
+        if len(result) == 0:
+            tk.messagebox.showinfo(
+                "Sample Tools", "Please, select some sample", parent=window)
+
+            return
+
+        copyDatoStudy = []
+        copyDatoStudy.clear()
+        qn = len(self.DatoStudy)
+        for i in range(qn):
+            if self.DatoStudy[i][0] in result:
+                copyDatoStudy.append(self.DatoStudy[i])
+                # print(self.DatoStudy[i][0])
+        self.DatoStudy = copyDatoStudy
+        self.SortBy("Layer")
+        window.destroy()
+        # print(copyDatoStudy)
+
+    def selectAll(self, samples, clean=False):  # Samples Time
+
+        if clean == True:
+            for cb, cb1 in enumerate(samples):
+                cb1.set(False)
+            return
+
+        for cb, cb1 in enumerate(samples):
+            cb1.set(True)
+        if self.btn_text.get() == "Select All":
+            self.btn_text.set("Unselect All")
+        else:
+            for cb, cb1 in enumerate(samples):
+                cb1.set(False)
+            self.btn_text.set("Select All")
+
+    #### Open Excel ####
+
+    def openExcel(self, op):
+        msg1 = "Problems opening the Study Excel file.\nPlease check if the file is opened."
+        try:
+            if op == True:
+                msg1 = "Problems opening the Excel file exported.\nPlease check if the file was created."
+                pathfile = self.Export_filename
+
+            else:
+
+                pathfile = self.filename
+
+            check_file = os.path.isfile(pathfile)
+
+            if check_file:
+
+                msg = tk.messagebox.askquestion(
+                    "Excel Study saved", f"Do you want to open the Excel file?")
+                if msg == "yes":
+                    webbrowser.open("file:" + pathfile)
+            else:
+                messagebox.showerror(
+                    message="This file was deleted from the folder", title="Error opening file")
+                self.Export_filename = ""
+
+        except:
+            messagebox.showerror(
+                message=msg1, title="Error opening file")
+            return
+
+    #### Save Gipn ####
+
+    def save_gipn(self, wn, data, data1, rawdatapath, gipnpath, option):
+
+        removed_path = "//tnnt02/ptc2/Nautilus/GLIMS_Raw_Data/Studies_Removed"
 
         result = [ing for ing, cb in zip(data, data1) if cb.get() > 0]
-        try:
+
+        if option == 6:
+            if len(result) == 0:
+                tk.messagebox.showerror(
+                    "Delete Sample from Raw Data", "Please, select some Sample/s to delete from the Raw Data folder", icon="warning", parent=wn)
+                return
+
+            try:
+                for fl in result:
+                    if tk.messagebox.askquestion(f'{fl} to remove',
+                                                 f'The {fl} will be removed. Are you sure?', parent=wn) == "no":
+
+                        return
+                    else:
+                        shutil.copyfile(rawdatapath + "/" +
+                                        fl, removed_path + "/" + fl)
+                        os.remove(rawdatapath + "/" + str(fl))
+
+                        tk.messagebox.showinfo(
+                            "Deleting files", "Sample removed correctly", parent=wn)
+                        wn.destroy()
+                        self.rawData(True, self.StudyNumberIn, True)
+            except:
+                tk.messagebox.showerror(
+                    "Deleting files", "File/s not removed correctly", icon="warning", parent=wn)
+                # wn.destroy()
+
+        if option == 5:
+
+            if len(result) == 0:
+
+                tk.messagebox.showerror(
+                    "Creating new Sample", "Please, first select one Sample to copy into the Raw Data folder", icon="warning", parent=wn)
+                return
+            if len(result) == 1:
+                try:
+                    newFile = str(result[0]).replace(
+                        ".txt", "") + ("_copy.txt")
+                    shutil.copyfile(rawdatapath + "/" +
+                                    result[0], rawdatapath + "/" + newFile)
+
+                    tk.messagebox.showinfo(
+                        "Creating new Sample", "Sample created correctly", icon="info", parent=wn)
+                    wn.destroy()
+                    self.rawData(True, self.StudyNumberIn, newFile)
+                    return
+
+                except:
+                    tk.messagebox.showerror(
+                        "Creating new Sample", "Problems doing the task", icon="error", parent=wn)
+                return
+            else:
+                tk.messagebox.showerror(
+                    "Creating new Sample", "Please, select only one Sample", icon="warning", parent=wn)
+
+        if option == 4:
+            webbrowser.open("file:" + gipnpath)
+            return
+
+        if option == 1:
+
+            for cb, cb1 in enumerate(data1):
+
+                cb1.set(True)
+            return
+
+        # result = [ing for ing, cb in zip(data, data1) if cb.get() > 0]
+        if option == 0:
+            if len(result) == 0:
+                tk.messagebox.showerror(
+                    "Copy to GIPN", "Please, select some Sample/s to copy GIPN folder", icon="warning", parent=wn)
+                return
+            try:
+                for fl in result:
+                    shutil.copy2(rawdatapath + "/" + str(fl), gipnpath)
+
+                tk.messagebox.showinfo(
+                    "Passing files", "File/s passed correctly", parent=wn)
+                wn.destroy()
+                self.rawData(True, self.StudyNumberIn, True)
+            except:
+                tk.messagebox.showerror(
+                    "Passing files", "File/s not passed correctly", icon="warning", parent=wn)
+                # wn.destroy()
+        if option == 2:
+            if len(result) == 0:
+                tk.messagebox.showerror(
+                    "Open file/s", "Please, select some Sample/s to open", icon="warning", parent=wn)
+                return
             for fl in result:
-                shutil.copy2(rawdatapath + "/" + str(fl), gipnpath)
-            tk.messagebox.showinfo(
-                "Passing files", "File/s passed correctly", parent=wn)
-            wn.destroy()
-        except:
-            tk.messagebox.showerror(
-                "Passing files", "File/s not passed correctly", icon="warning", parent=wn)
-            wn.destroy()
+                pathfile = rawdatapath + "/" + str(fl)
+                webbrowser.open("file:" + pathfile)
+        if option == 3:
+
+            if len(result) == 0:
+                tk.messagebox.showerror(
+                    "Change ID", "Please, select some Sample", icon="warning", parent=wn)
+                return
+            for fl in result:
+
+                old_name = rawdatapath + "/" + fl
+                new_name = tk.simpledialog.askstring(f'{fl} to change',
+                                                     f'Please entry the new value.(Sample Number-Id Number)', initialvalue=fl, parent=wn)
+                if new_name == None:
+                    return
+                try:
+                    if tk.messagebox.askquestion(f'{fl} to change',
+                                                 f'The new value.(Sample Number-Id Number) is {new_name}. Are you sure?', parent=wn) == "no":
+                        return
+                    checkName = new_name.split("_")
+                    if len(checkName) == 1:
+                        tk.messagebox.showerror(
+                            "Rename files", "Please check the new value, the end of the file is missing or wrong!!", icon="error", parent=wn)
+                        return
+
+                    os.rename(old_name, (rawdatapath + "/" + new_name))
+                    tk.messagebox.showinfo(
+                        "Rename files", "File renamed correctly",  parent=wn)
+                    wn.destroy()
+                    self.rawData(True, self.StudyNumberIn, True)
+                except:
+                    tk.messagebox.showerror(
+                        "Rename files", "File not renamed correctly", icon="warning", parent=wn)
+
+    #### Open Template excel ####
+
+    def template(self):
+        pathfile = r'C:/Upload Templates/Tarragona Fabrication TS&D Lab.xlsx'
+        webbrowser.open(pathfile)
+
+    #### Open Study and save it ####
 
     def Open_web(self):
 
-        pathfile = r'C:/Python/Studies/'
+        ano = arrow.utcnow().format('YYYY', locale='es')
+        mes = arrow.utcnow().format('MMMM', locale='es')
+        pathfile = f'C:/Python/Studies/{ano}/{mes}/'
         pathDown = f'C:/Users/{os.getlogin()}/Downloads/'
         pathDownFile = f'C:/Users/{os.getlogin()}/Downloads/StudySummary_BC.xlsx'
         pathDownFile1 = f'C:/Users/{os.getlogin()}/Downloads/StudySummary_BC .xlsx'
+
+        isExist = os.path.exists(pathfile)
+        if not isExist:
+            # Create a new directory because it does not exist
+            os.makedirs(pathfile)
 
         if os.path.isfile(pathDownFile):
             os.remove(pathDownFile)
@@ -464,14 +1462,20 @@ class Window:
                 if self.studyN != None:
                     webbrowser.open(f"{url} ?StudyID={self.studyN}")
 
+    #### Clean text ####
+
     def CleanTXT(self):
         self.entry.delete('0', END)
         self.entry1.delete('0', END)
 
+    #### Choose excel study file ####
+
     def Choose_File(self):
         self.CleanTXT()
+        self.InitialSamples = 0
         try:
-            self.filename = filedialog.askopenfilename(title="Open file")
+            self.filename = filedialog.askopenfilename(
+                title="Open file", filetypes=[("Excel files", "*.xls"), ("Excel files", "*.xlsx")])
             self._path = self.filename.split(".")
             if self._path[1] == "xlsx":
                 self.entry.insert(0, str(self.filename))
@@ -480,6 +1484,8 @@ class Window:
                     message="This file is not EXCEL", title="Error extension file")
         except:
             return
+
+    #### Fill combos of the main window ####
 
     def FillCombos(self, id):
         global mat
@@ -501,6 +1507,8 @@ class Window:
     def updateCombo():
         return
 
+    #### Get data from excel file Study number, layers eyt... ####
+
     def GetData(self, spl1):
 
         global data
@@ -511,8 +1519,13 @@ class Window:
 
             dat = spl1[1].split("\n")
             self.IDsample = (str(dat[0]).replace("Sample ID: ", ""))
+            if self.IDsample == self.Oldsample:
+                self.Oldsample = ""
+                return "Same"
             if self.IDsample != "":
                 self.IDsample = (str(dat[0]).replace("Sample ID: ", ""))
+                if self.Oldsample == "":
+                    self.Oldsample = self.IDsample
                 SampleN = True
                 return
             else:
@@ -520,47 +1533,50 @@ class Window:
                 return
 
         if "Layer 01" in spl1:
-            data = "/01/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/01/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 02" in spl1:
-            data = "/02/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/02/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 03" in spl1:
-            data = "/03/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/03/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 04" in spl1:
-            data = "/04/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/04/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 05" in spl1:
-            data = "/05/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/05/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 06" in spl1:
-            data = "/06/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/06/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 07" in spl1:
-            data = "/07/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/07/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 08" in spl1:
-            data = "/08/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/08/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
         if "Layer 09" in spl1:
-            data = "/09/" + str(spl1[5]) + "/" + str(spl1[6]) + "/" + str(
+            data = "/09/" + str(spl1[5]) + "/" + str(spl1[6].replace("/", "-")) + "/" + str(
                 spl1[8]) + "/" + str(spl1[10]) + "/" + str(spl1[13]) + "/" + str(spl1[12])
             return data
 
     def Get_StudyNumber(self, rows):
-        # print("----- > " + str(rows))
+        print("----- > " + str(rows))
         row1 = []
-        # row1 = rows.split("#")
-        # entry1.insert(0,str(row1[1]) + "_Exported" )
+        row1 = rows[2].split("#")
+        self.StudyNumbergot = str(row1[1])
+        self.entry1.delete(0, 'end')
+        self.entry1.insert(0, str(row1[1]).strip() + "_Exported")
+        return str(row1[1])
 
     def Get_Engineer(self, rows):
         global Owner
@@ -575,6 +1591,8 @@ class Window:
                 print(LogText)
                 self.set_Log_Text(LogText)
 
+    #### Open file ####
+
     def open_file(self):
 
         global data
@@ -584,28 +1602,56 @@ class Window:
         global input1
         global input2
         global Owner
+        global a
+        global SampleN
 
+        SampleN = False
+
+        workbook = ""
         self.DatoStudy = []
+        self.DatoStudy.clear()
+        self.layer_change = ""
+        self.tag_sample = ""
+        self.cnl = "white"
         rep = ""
+        wordToFind = ""
+        input1 = False
+        input2 = False
+        tagn = False
         mat.clear()
         mats.clear()
         Owner = ""
         SamplesN.clear()
         self.entry3.delete('0', END)
         pas = self.CheckBoxes(False)
+        self.Oldsample = ""
+        data = ""
+        a = 0
         if pas == "":
             return
+        workbook = xlrd.open_workbook(self.filename)
+
+        wb = copy2(workbook)
+        # wb.get_sheet(0).write(0, 0, "test")
+
+        # wb.save("c:/test.xlsx")
         try:
             workbook = xlrd.open_workbook(self.filename)
+
+            # wb = copy2(workbook)
+            # wb.get_sheet(0).write(0, 0, "test")
+
+            # wb.save('test.xlsx')
             worksheet = workbook.sheet_by_name('Sheet2')
             self.master.state("zoomed")
+            # workbookNew = xlsxwriter.workbook()
 
         except:
             messagebox.showerror(
                 message="Problems opening the Excel file.\nPlease check the file.", title="Error opening file")
             return
 
-        print("Opening file ......")
+        # print("Opening file ......")
         self.set_Log_Text("Opening file ......")
         num_rows = worksheet.nrows - 1
         if num_rows < 9:
@@ -614,23 +1660,30 @@ class Window:
             return
         curr_row = -1
         row = []
-        curr_row = 0
+        row.clear()
         Base = True
         if self.tree.exists:
             self.tree.destroy()
-            print("Creating Table......")
+            # print("Creating Table......")
             self.set_Log_Text("Creating Table......")
             self.CreateTable()
         self.DatoStudy.clear()
         nsamples = 0
+        self.IDsample = ""
         msg_box = ""
         mfi_boolean = False
         den_boolean = False
         mfi_den_boolean = False
+        dat1 = None
+
+        ##### Recorrer todas las filas Excel para encontrar Samples #####
 
         while curr_row < num_rows:
             curr_row += 1
             row = worksheet.row_values(curr_row)
+            if curr_row == 0:
+                # self.NumberStudy = self.Get_StudyNumber(row)
+                self.NumberStudy.set(str(self.Get_StudyNumber(row)))
             if curr_row > 2 and curr_row < 6:
                 self.Get_Engineer(row)
 
@@ -641,7 +1694,7 @@ class Window:
             if "Sample ID:" in str(row[1]):  # and len(str(row[1])) == 10:
                 dat1 = self.GetData(row)
 
-            if "Layer" in str(row[1]) and len(str(row[1])) == 8:
+            if "Layer" in str(row[1]) and len(str(row[1])) == 8 and not dat1 == "Same":
 
                 rowM = row[10]
                 if rowM == '' or rowM == None:
@@ -658,7 +1711,9 @@ class Window:
                             row[8] = self.InputMFI_DENSITY(
                                 row[6], "Density", True)
                             dat1 = self.GetData(row)
+
                             pasa = True
+                            break
 
                     if pasa == False:
 
@@ -733,8 +1788,7 @@ class Window:
                         row[8] = 0
 
                 dat1 = self.GetData(row)
-
-            # print("dat1 ----" + str(dat1))
+                print("dat1 ----" + str(dat1))
                 if str(dat1) != "None":
                     if self.IDsample != "":
                         if self.IDsample == rep:
@@ -747,6 +1801,14 @@ class Window:
                             self.AddData(str(data), str(data))
                             rep = self.IDsample
                             nsamples = nsamples + 1
+        if pasa == False:
+            msg = messagebox.askyesno(
+                "Save EXCEL", "Do you want to save data modified in to the Excel file?")
+            if msg == "yes":
+                self.SaveData()
+
+        if self.InitialSamples == 0:
+            self.InitialSamples = nsamples
         self.entry3.insert(0, str(nsamples))
         self.FillCombos(3)
         self.Materials['values'] = mat
@@ -757,6 +1819,12 @@ class Window:
         self.set_Log_Text("Número de Rows ----- " + str(len(self.DatoStudy)))
         print("Número de Samples ----- " + str(nsamples))
         self.set_Log_Text("Número de Samples ----- " + str(nsamples))
+
+    #### Save the MFI/Density to Excel file #####
+
+    def SaveData(self):
+        pass
+    #### Check density / MFI osf the materials of the Sample ####
 
     def InputMFI_DENSITY(self, name, tip, bo=False):
 
@@ -832,10 +1900,17 @@ class Window:
 
     def Save_MFI_Density(self, mat, valor, tip):
 
+        ch1 = ("/", "'\'", ".", "*", ":", "?", "|", "<", ">")
+        for ch2 in ch1:
+            if ch2 in mat:
+                mat = mat.replace(ch2, "_")
+
         mat1 = f'C:\Python\{tip}/{mat}.txt'
         text_file = open(mat1, "w")
         text_file.write(str(valor))
         text_file.close
+
+    #### Check the boxes of the window ####
 
     def CheckBoxes(self, condition):
 
@@ -853,6 +1928,8 @@ class Window:
                 message="Please, fill the name file box!!", title="Error file name")
             return "1"
 
+    #### Save the filter to the Excel file ####
+
     def SaveToExcel(self):
 
         pas = self.CheckBoxes(True)
@@ -865,12 +1942,15 @@ class Window:
                 return
 
             folder = os.path.dirname(self.filename)
-            Export_filename = folder + "/" + self.NameFile + "_Exported.xlsx"
-            LogText = "File ---- " + str(Export_filename)
+            self.Export_filename = folder + "/" + self.NameFile + ".xlsx"
+            LogText = "File ---- " + str(self.Export_filename)
             print(LogText)
             self.set_Log_Text(LogText)
-            workbook = xlsxwriter.Workbook(Export_filename)
+
+            workbook = xlsxwriter.Workbook(self.Export_filename)
             worksheet = workbook.add_worksheet(self.NameFile)
+            worksheet.set_landscape()
+            header = "Study Nº: " + self.NameFile
 
             bold = workbook.add_format(
                 {"bold": True, "font_size": 12, "align": CENTER, 'border': 1})
@@ -883,11 +1963,15 @@ class Window:
                 row = self.tree.item(row_id)['values']
                 worksheet.write_row(int(row_id)+1, 0, row, bold)
                 worksheet.autofit()
+            worksheet.set_header(header)
             workbook.close()
-            messagebox.showinfo(message="Job DONE!!",
-                                title="Status Conversion")
+            messagebox.showinfo(message="    Job DONE!!     ",
+                                title="Excel creation Status")
             print("Excel created ...")
             self.set_Log_Text("Excel created ...")
+            self.openExcel(True)
+
+    #### Create TreeView in main window ####
 
     def CreateTable(self):
 
@@ -920,9 +2004,9 @@ class Window:
         self.tree.heading("Layer", text="Layer", anchor=CENTER)
         self.tree.heading("Percentage %", text="Percentage %", anchor=CENTER)
         self.tree.heading("Amount %", text="Amount %", anchor=CENTER)
-        self.tree.heading("Density", text="Density g/10 m", anchor=CENTER)
+        self.tree.heading("Density", text="Density g/cm³", anchor=CENTER)
         self.tree.heading(
-            "Melt Index", text="Melt Index g/cm³", anchor=CENTER)
+            "Melt Index", text="Melt Index g/10 min", anchor=CENTER)
         self.tree.heading("Resin", text="Resin/Additives", anchor=CENTER)
 
     def AddData(self, dataSample, dataSample2):
@@ -937,23 +2021,48 @@ class Window:
         dato1 = []
         dato = dataSample.split("/")
         dato1 = dataSample2.split("/")
+        dato1.append("False")  # Per comparar
+
+        self.tree.tag_configure('white', background='white')
+        self.tree.tag_configure('gray', background='#cccccc')
+        self.tree.tag_configure('yellow', background='yellow')
+
         if Base == True:
+
             self.DatoStudy.append(dato1)
             if dato1[3] not in mat:
                 mat.append(dato1[3])
             if dato[0] not in SamplesN:
+
                 if dato[0] != "-----":
                     SamplesN.append(dato[0])
-        if tagn == False:
-            tagn = True
-            self.tree.insert(parent="", index='end', iid=a, text='', values=(
-                dato[0], dato[1], dato[2], dato[6], dato[4], dato[5], dato[3]), tag='gray')
+                    tagn = True
         else:
             tagn = False
-            self.tree.insert(parent="", index='end', iid=a, text='', values=(
-                dato[0], dato[1], dato[2], dato[6], dato[4], dato[5], dato[3]))
-            self.tree.tag_configure('gray', background='#cccccc')
+            if self.tag_sample != dato[0] and dato[0] != "-----":
+
+                self.tag_sample = dato[0]
+                tagn = True
+
+        # if self.layer_change != dato[1] and self.layer_change == "":
+        if self.cnl == "gray":
+            self.cnl = "white"
+            if self.layer_change == dato[1]:
+                self.cnl = "gray"
+        else:
+            self.cnl = "gray"
+            if self.layer_change == dato[1]:
+                self.cnl = "white"
+        if tagn == True:
+            self.cnl = "yellow"
+            tagn = False
+
+        self.tree.insert(parent="", index='end', iid=a, text='', values=(
+            dato[0], dato[1], dato[2], dato[6], dato[4], dato[5], dato[3]), tag=self.cnl)
+        self.layer_change = dato[1]
         a = a + 1
+
+    #### Sort by depending combobox name ####
 
     def SortBy(self, words):
 
@@ -1010,7 +2119,7 @@ class Window:
         for i in range(0, nrowss):
             txt = self.DatoStudy[i]
             # break
-            if txt[l] == wordToFind:
+            if str(txt[l]).strip() == wordToFind.strip():
 
                 if IDsamples == "":
                     IDsamples = str(txt[0])
@@ -1075,6 +2184,8 @@ class Window:
         ListSort.clear()
         Sorting.clear()
 
+    #### Mfi and Density calculator ####
+
     def SumDifferentMI(self, mi, per):
 
         mresult = 0
@@ -1083,15 +2194,24 @@ class Window:
         mresult = Decimal(mi)*Decimal(per)/100
         return mresult
 
-    def createModal(self):
+    #### Open Sample_Window ####
+
+    def createModal(self, id, comp=False, adj=0):
+
+        if id != "":
+            self.IdSample = id
+        else:
+            self.IdSample = self.SamplesCO.get()
 
         if len(self.SamplesCO["values"]) > 0:
-            Sample_Window(self.master, self.SamplesCO,
-                          self.DatoStudy, self)
+            Sample_Window(self.master, self.IdSample,
+                          self.DatoStudy, self, comp, adj)
         else:
             messagebox.showerror(
                 message="Please, open the file to Process!!", title="Not Sample available")
             return
+
+    #### Log window ####
 
     def Consola(self):
         global LogOpen
@@ -1117,11 +2237,6 @@ class Window:
         # if text != "" :
             # self.set_Log_Text(text)
 
-    def ClearText(self):
-        global text
-        self.my_text_box.delete(1.0, tk.END)
-        text = ""
-
     def set_Log_Text(self, txt):
         global text
 
@@ -1139,58 +2254,122 @@ class Window:
         except:
             return
 
+    #### Borrar textos ####
+
+    def ClearText(self):
+        global text
+        self.my_text_box.delete(1.0, tk.END)
+        text = ""
+
+    #### MDO tools #####
+
     def mdotools(self):
         self.master.state("zoomed")
         Mdotools(self.master)
 
-    def open_DataSheet(self):
+    #### Show dataSheet #####
 
-        msg = tk.simpledialog.askstring(
-            "DataSheet finder", "-               Please, enter the resine Name                   -")
-        if msg == "" or msg == None:
-            return
-        msg = str(msg).upper()
-        rate = []
-        rate.clear()
-        option = False
+    def show_Datasheet(self, wn, data, data1):
+
+        result = [ing for ing, cb in zip(data1, data) if cb.get() > 0]
+        if len(result) > 1:
+            tk.messagebox.showinfo(
+                "Datasheet file", "Please, select only one resine", parent=wn)
+        else:
+            self.open_DataSheet(wn, result[0], False)
+
+    #### Open Datasheet files PDF ####
+
+    def open_DataSheet(self, wn, item="", op=False):
         PFile = r"C:/Python/DataSheet/"  # + self.mat_item + ".pdf"
-        contenido = os.scandir(PFile)
-        for elemento in contenido:
+        msg = item
 
-            elementos = elemento.name[0:-4].upper()
-            elementos = elementos.replace("POLYETHYLENE RESIN", "")
-            elementos = elementos.replace("POLYOLEFIN PLASTOMER", "")
-            elementos = elementos.replace("DOW", "")
-            elementos = elementos.replace("ENHANCED", "")
+        if item == "":
 
-            elementos = str(elementos)
-
-            r = SequenceMatcher(None, str(elementos),
-                                msg).ratio()
-            namemat = elemento, r
-            rate.append(namemat)
-
-        max_ratio = max(rate, key=lambda x: x[1])
-
-        if max_ratio[1] > 0.60:
-
-            webbrowser.open(max_ratio[0])
-            option = True
-
-        if option == False:
-
-            self.msg_box = tk.messagebox.askquestion('Datasheet report', "There is not datasheet file for " + "- " + str(msg) + " -"
-                                                     + " \nDo you want to find it on the iProduct Quick Search?", icon='warning')
-            if self.msg_box == "yes":
-                copia.copy(msg)
-                webbrowser.open(
-                    'https://prodlist.intranet.dow.com/Search/Search.aspx')
-            else:
+            msg = tk.simpledialog.askstring(
+                "DataSheet finder", "-               Please, enter the resine Name                   -")
+            if msg == "" or msg == None:
                 self.msg_box = tk.messagebox.askquestion(
                     'Datasheet report', "Do you want to open the DataSheet folder\nto find it there? ", icon='info')
                 if self.msg_box == "yes":
                     webbrowser.open(str("file:")+PFile)
+                return
+        msg = str(msg).upper()
+        rate = []
+        rate.clear()
+        option = False
+        correct = False
+        Nrate = 0.97
+        NTimes = 0
+        while correct == False:
+            contenido = os.scandir(PFile)
+            for elemento in contenido:
 
+                elementos = elemento.name[0:-4].upper()
+                if op == True:
+                    Nrate = 0.40
+                    elementos = elementos.replace("POLYETHYLENE RESIN", "")
+                    elementos = elementos.replace("POLYOLEFIN PLASTOMER", "")
+                    elementos = elementos.replace("DOW", "")
+                    elementos = elementos.replace("ENHANCED", "")
+
+                elementos = str(elementos)
+
+                r = SequenceMatcher(None, str(elementos),
+                                    msg).ratio()
+                namemat = elemento, r
+                rate.append(namemat)
+
+            max_ratio = max(rate, key=lambda x: x[1])
+
+            if max_ratio[1] > Nrate:
+
+                webbrowser.open(max_ratio[0])
+                option = True
+                NTimes = NTimes + 1
+            else:
+
+                if NTimes > 2:
+                    NTimes = 0
+                    correct = True
+                    option = False
+
+            if option == False:
+                if item == "":
+                    self.msg_box = messagebox.askquestion('Datasheet report', "There is not datasheet file for " + "- " + str(msg) + " -"
+                                                          + " \nDo you want to find it on the iProduct Quick Search?", icon='warning')
+                else:
+                    self.msg_box = messagebox.askquestion('Datasheet report', "There is not datasheet file for " + "- " + str(msg) + " -"
+                                                          + " \nDo you want to find it on the iProduct Quick Search?", icon='warning', parent=wn)
+
+                if self.msg_box == "yes":
+                    copia.copy(msg)
+                    webbrowser.open(
+                        'https://prodlist.intranet.dow.com/Search/Search.aspx')
+                    correct = True
+                else:
+                    if item == "":
+                        self.msg_box = messagebox.askquestion(
+                            'Datasheet report', "Do you want to open the DataSheet folder\nto find it there? ", icon='info')
+                    else:
+                        self.msg_box = messagebox.askquestion(
+                            'Datasheet report', "Do you want to open the DataSheet folder\nto find it there? ", icon='info', parent=wn)
+                    if self.msg_box == "yes":
+                        webbrowser.open(str("file:")+PFile)
+                        correct = True
+                    else:
+                        correct = True
+            else:
+                if item == "":
+                    self.msg_box = messagebox.askquestion(
+                        'Datasheet report', "The DataSheet file opened is correct?", icon='info')
+                else:
+                    self.msg_box = messagebox.askquestion(
+                        'Datasheet report', "The DataSheet file opened is correct?", icon='info', parent=wn)
+                if self.msg_box == "no":
+                    Nrate = Nrate + 0.01
+                else:
+                    correct = True
 
 #######  -------- GUI - Debug Console -------- ######
 
@@ -1224,12 +2403,12 @@ class OpenConsola(tk.Toplevel):
 
 class Sample_Window(tk.Toplevel):
 
-    def __init__(self, parent, SamplesCO, DatoStudy, obj1):
+    def __init__(self, parent, SamplesCO, DatoStudy, obj1, comp, adj=0):
         super().__init__(parent)
         self.parent = parent
         self.obk = Window
         self.obj1 = obj1
-        iD = SamplesCO.get()
+        iD = SamplesCO
         self.DatoStudy = DatoStudy
         self.Feed = tk.StringVar()
         self.Zone1 = tk.StringVar()
@@ -1249,13 +2428,13 @@ class Sample_Window(tk.Toplevel):
         htotal = self.winfo_screenheight()
         wventana = 800
         hventana = 550
-        pwidth = round(wtotal/2-wventana/2)
-        pheight = round(htotal/2-hventana/2)
+        pwidth = round(wtotal/2-wventana/2) - adj
+        pheight = round(htotal/2-hventana/2) - adj
         self.geometry(str(wventana)+"x"+str(hventana) +
                       "+"+str(pwidth)+"+"+str(pheight))
         self.title("Sample Layers Distribution")
         self.boton_Kg = tk.Button(
-            self, text="Kg/h\nCalculation", font=("Verdana", 10, "bold"), command=self.Kg_hour)
+            self, text="kg/h\nCalculation", font=("Verdana", 10, "bold"), command=self.Kg_hour)
         self.boton_Kg.place(x=20, y=400)
         self.boton_Kg = tk.Button(self, text="Mixing\nCalculation", font=(
             "Verdana", 10, "bold"), command=self.Kg_Mixing)
@@ -1266,9 +2445,9 @@ class Sample_Window(tk.Toplevel):
         self.boton_Temp = tk.Button(self, text=" Edit TEMP  \nprofile", font=(
             "Verdana", 10, "bold"), command=partial(self.Fill_Temp, True))
         self.boton_Temp.place(x=165, y=400)
-        self.boton_Temp2 = tk.Button(self, text="Show\nDataSheet  ", font=(
+        self.boton_Data = tk.Button(self, text="Show\nDataSheet  ", font=(
             "Verdana", 10, "bold"), command=self.Open_Datasheet)
-        self.boton_Temp2.place(x=165, y=450)
+        self.boton_Data.place(x=165, y=450)
         self.boton_coment = tk.Button(self, text="Show\nComments ", font=(
             "Verdana", 10, "bold"), command=self.Open_Comments)
         self.boton_coment.place(x=165, y=500)
@@ -1318,11 +2497,11 @@ class Sample_Window(tk.Toplevel):
         self.label_Adapt.place(x=530, y=500)
 
         self.focus()
-        self.grab_set()
+        # self.grab_set()
 
         self.treeTop = ttk.Treeview(self, selectmode='browse')
         self.treeTop['columns'] = (
-            'Layer', 'Percentage %', 'Amount %', 'Density', 'Melt Index', 'Total Kg/h', 'Resin')
+            'Layer', 'Percentage %', 'Amount %', 'Density', 'Melt Index', 'Total kg/h', 'Resin')
         self.treeTop.place(x=20, y=40, height=350)
         self.vsb1 = ttk.Scrollbar(
             self, orient="vertical", command=self.treeTop.yview)
@@ -1336,8 +2515,8 @@ class Sample_Window(tk.Toplevel):
         self.treeTop.column("Percentage %", anchor=CENTER, width=80)
         self.treeTop.column("Amount %", anchor=CENTER, width=80)
         self.treeTop.column("Density", anchor=CENTER, width=90)
-        self.treeTop.column("Melt Index", anchor=CENTER, width=100)
-        self.treeTop.column("Total Kg/h", anchor=CENTER, width=80)
+        self.treeTop.column("Melt Index", anchor=CENTER, width=90)
+        self.treeTop.column("Total kg/h", anchor=CENTER, width=70)
         self.treeTop.column("Resin", anchor=CENTER, width=280)
 
         # Create Headings
@@ -1346,10 +2525,10 @@ class Sample_Window(tk.Toplevel):
         self.treeTop.heading(
             "Percentage %", text="Percentage %", anchor=CENTER)
         self.treeTop.heading("Amount %", text="Amount %", anchor=CENTER)
-        self.treeTop.heading("Density", text="Density g/10 m", anchor=CENTER)
+        self.treeTop.heading("Density", text="Density g/cm³", anchor=CENTER)
         self.treeTop.heading(
-            "Melt Index", text="Melt Index g/cm³", anchor=CENTER)
-        self.treeTop.heading("Total Kg/h", text="Total Kg/h", anchor=CENTER)
+            "Melt Index", text="MFI g/10 min", anchor=CENTER)
+        self.treeTop.heading("Total kg/h", text="Total kg/h", anchor=CENTER)
         self.treeTop.heading("Resin", text="Resin/Additives", anchor=CENTER)
         self.TKg_mix = []
         self.TKg_Final = []
@@ -1358,8 +2537,8 @@ class Sample_Window(tk.Toplevel):
         self.ItemCO['values'] = self.dad
         self.ItemCO.current(0)
         self.ItemCO.bind('<<ComboboxSelected>>',
-                         lambda event: self.Layer_Calculation(event, iD))
-        self.Layer_Calculation(self, iD)
+                         lambda event: self.Layer_Calculation(event, iD, False))
+        self.Layer_Calculation(self, iD, comp)
         self.Next_Mix = False
 
     def Denisty_MFI(self):
@@ -1368,8 +2547,14 @@ class Sample_Window(tk.Toplevel):
         self.density = []
         self.mfiList = []
         nlayer = ""
+
         for row_id in self.treeTop.get_children():
+            colr1 = "black"
             items = self.treeTop.item(row_id)['values']
+            if items[3] == 0:
+                messagebox.showerror("Density wrong", "The resisn " + str(items[6]) +
+                                     "\nhasn't a correct density, please fix the problem and try again.", parent=self)
+
             if item1 == "":
                 item1 = items[0]
             if items[0] == item1:
@@ -1378,8 +2563,9 @@ class Sample_Window(tk.Toplevel):
                 if items[4] == 'None':
                     items[4] = 0
 
-                self.Sum_denisty(Decimal(items[2]), Decimal(
-                    items[3]), False)
+                den1 = self.Sum_denisty(Decimal(items[2]), Decimal(
+                    items[3]), False, items[6])
+
                 self.Sum_MFI(Decimal(items[2]), Decimal(
                     items[4]),  False)
                 if nlayer == "":
@@ -1392,11 +2578,17 @@ class Sample_Window(tk.Toplevel):
                 if items[4] == 'None':
                     items[4] = 0
                 den1 = self.Sum_denisty(Decimal(items[2]), Decimal(
-                    items[3]),  True)
+                    items[3]),  True, items[6])
+                if den1 == 0:
+                    colr1 = "red"
+
                 mfi1 = self.Sum_MFI(Decimal(items[2]), Decimal(
                     items[4]),  True)
+                if mfi1 == 0:
+                    colr1 = "red"
+
                 item1 = items[0]
-                ap = nlayer, (round(den1, 3)), (round(mfi1, 3))
+                ap = nlayer, round(den1, 3), round(mfi1, 3), colr1
                 newList.append(ap)
                 nlayer = ""
                 nlayer = str(items[0])
@@ -1405,35 +2597,50 @@ class Sample_Window(tk.Toplevel):
             items[3] = 0
         if items[4] == 'None':
             items[4] = 0
+
         den1 = self.Sum_denisty(Decimal(items[2]), Decimal(
-            items[3]),  True)
+            items[3]),  True, items[6])
+        if den1 == 0:
+            colr1 = "red"
+
         mfi1 = self.Sum_MFI(Decimal(items[2]), Decimal(
             items[4]),  True)
+        if mfi1 == 0:
+            colr1 = "red"
 
-        ap = nlayer, (round(den1, 3)), (round(mfi1, 3))
+        ap = nlayer, round(den1, 3), round(mfi1, 3), colr1
         newList.append(ap)
         print(ap)
         ShowDensity(self, newList)
 
-    def Sum_denisty(self, amo, den, ret):
-        dpl = []
+    def Sum_denisty(self, amo, den, ret, res):
+        values = []
+        # Formula =1/((amount1/den1)+(amount2/den2)+(1-amount1-amount2)/den3)
+        d = 0.00001
         if ret == True:
+            n = 1
+            n1 = len(self.density)
+            amount = 1
             for a, d in self.density:
-                if d > 0:
-                    dp = (Decimal(a)/100)/Decimal(d)
-                    dpl.append(dp)
-                else:
-                    dpl.append(0)
-            if sum(dpl) != 0:
-                dens = 1/(sum(dpl))
-                self.density.clear()
-                tot = amo, round(den, 3)
-                self.density.append(tot)
-                return dens
-            else:
-                return 0
-        tot = amo, round(den, 3)
-        self.density.append(tot)
+                if d == 0:
+                    d = 0.00001
+                if n < n1:
+                    a = Decimal(a/100)
+                    amount = amount - a
+                    values.append((a/Decimal(d)))
+                n = n+1
+
+            dens = 1/((sum(values)) + (amount/d))
+            self.density.clear()
+            tot = amo, round(den, 3)
+            self.density.append(tot)
+            values.clear()
+            # self.density.append(tot)
+            return dens
+        else:
+
+            tot = amo, round(den, 3)
+            self.density.append(tot)
 
     def Sum_MFI(self, amo, mfi, ret):
         dpl = []
@@ -1455,7 +2662,7 @@ class Sample_Window(tk.Toplevel):
         totM = amo, round(mfi, 3)
         self.mfiList.append(totM)  # totM
 
-    def Layer_Calculation(self, event, iD):
+    def Layer_Calculation(self, event, iD, comp):
 
         self.multi_2 = False
         multi = self.Multi.get()
@@ -1463,7 +2670,7 @@ class Sample_Window(tk.Toplevel):
         if len(multi_1) > 1:
             self.multi_2 = True
 
-        self.Kgh.set(str("0.0") + " Kg")
+        self.Kgh.set(str("0.0") + " kg")
         self.Next_Mix = False
         self.treeTop.delete(*self.treeTop.get_children())
         iD1 = self.ItemCO.get()
@@ -1471,40 +2678,72 @@ class Sample_Window(tk.Toplevel):
         tag1 = True
         dato = []
         nrowss = len(self.DatoStudy)
+
+        self.treeTop.tag_configure('odd', background='white')
+        self.treeTop.tag_configure('even', background='#cccccc')
+        self.treeTop.tag_configure('RED', background='red')
+        self.treeTop.tag_configure('green', background='green')
+        self.treeTop.tag_configure('cyan', background='cyan')
+        self.treeTop.tag_configure('yellow', background='yellow')
+        layer_add = ""
+        tagsN = "odd"
         for i in range(0, nrowss):
+
             dato = self.DatoStudy[i]
+
             if self.multi_2 == False:
                 if iD1 == "All":
                     iD2 = dato[1]
                 else:
                     iD2 = iD1
                 if (dato[0] == iD and dato[1] == iD2):
-                    if tag1 == True:
-                        tag1 = False
-                        self.treeTop.insert(parent='', index='end', iid=ab, text='', values=(
-                            dato[1], dato[2], dato[6], dato[4], dato[5], "", dato[3]), tag='gray')
+                    ####
+                    if tagsN == "odd":
+                        tagsN = "even"
+                        if layer_add == dato[1]:
+                            tagsN = "odd"
                     else:
-                        tag1 = True
-                        self.treeTop.insert(parent='', index='end', iid=ab, text='', values=(
-                            dato[1], dato[2], dato[6], dato[4], dato[5], "", dato[3]))
-                        self.treeTop.tag_configure(
-                            'gray', background='#cccccc')
-                    ab = ab + 1
+                        tagsN = "odd"
+                        if layer_add == dato[1]:
+                            tagsN = "even"
+                    #####
+                    if comp == True:
+                        if str(dato[8]) == "red":
+                            tagsN = "RED"
+
+                        if str(dato[8]) == "green":
+                            tagsN = "green"
+                        if str(dato[8]) == "cyan":
+                            tagsN = "cyan"
+
+                    self.treeTop.insert(parent='', index='end', iid=ab, text='', values=(
+                        dato[1], dato[2], dato[6], dato[4], dato[5], "", dato[3]), tag=tagsN)
+                ab = ab + 1
+                layer_add = dato[1]
             else:
                 for mu in multi:
                     iD2 = mu
                     if (dato[0] == iD and dato[1] == "0" + iD2):
-                        if tag1 == True:
-                            tag1 = False
-                            self.treeTop.insert(parent='', index='end', iid=ab, text='', values=(
-                                dato[1], dato[2], dato[6], dato[4], dato[5], "", dato[3]), tag='gray')
+                        if tagsN == "odd":
+                            tagsN = "even"
+                            if layer_add == dato[1]:
+                                tagsN = "odd"
                         else:
-                            tag1 = True
-                            self.treeTop.insert(parent='', index='end', iid=ab, text='', values=(
-                                dato[1], dato[2], dato[6], dato[4], dato[5], "", dato[3]))
-                            self.treeTop.tag_configure(
-                                'gray', background='#cccccc')
+                            tagsN = "odd"
+                            if layer_add == dato[1]:
+                                tagsN = "even"
+                        if comp == True:
+                            if str(dato[8]) == "red":
+                                tagsN = "RED"
+                            if str(dato[8]) == "green":
+                                tagsN = "green"
+                            if str(dato[8]) == "cyan":
+                                tagsN = "cyan"
+
+                        self.treeTop.insert(parent='', index='end', iid=ab, text='', values=(
+                            dato[1], dato[2], dato[6], dato[4], dato[5], "", dato[3]), tag=tagsN)
                         ab = ab + 1
+                        layer_add = dato[1]
 
     def Check_Item_Tree(self):
         curItem = self.treeTop.focus()
@@ -1517,57 +2756,23 @@ class Sample_Window(tk.Toplevel):
         else:
             True
 
-    def Open_Datasheet(self, op=False):
+    def Open_Datasheet(self):
 
-        if self.Check_Item_Tree() == False and op == False:
+        if self.Check_Item_Tree() == False:
             return
 
-        rate = []
-        rate.clear()
-        option = False
-        PFile = r"C:/Python/DataSheet/"  # + self.mat_item + ".pdf"
-        contenido = os.scandir(PFile)
-        for elemento in contenido:
-            # print(str(elemento.name))
-
-            elementos = elemento.name[0:-4]
-            r = SequenceMatcher(None, str(elementos),
-                                self.mat_item).ratio()
-            rate.append(r)
-            # print(r)
-            if r > 0.96:
-                LogtText = f"Rate search pass ---  {r}"
-                print(LogtText)
-                self.obk.set_Log_Text(self.obj1, LogtText)
-                webbrowser.open(elemento)
-                option = True
-                break
-        if option == False:
-            LogtText = f"Rate search fail ---  {max(rate)} ---  {self.mat_item}"
-            print(LogtText)
-            self.obk.set_Log_Text(self.obj1, LogtText)
-
-            self.msg_box = tk.messagebox.askquestion('Datasheet report', "There is not datasheet file for " + "- " + str(self.mat_item) + " -"
-                                                     + " \nDo you want to find it?", icon='warning', parent=self)
-            if self.msg_box == "yes":
-                copia.copy(self.mat_item)
-                webbrowser.open(
-                    'https://prodlist.intranet.dow.com/Search/Search.aspx')
-            else:
-                self.msg_box = tk.messagebox.askquestion(
-                    'Datasheet report', "Do you want to open the DataSheet folder\nto find it there? ", icon='info', parent=self)
-                if self.msg_box == "yes":
-                    webbrowser.open(PFile)
+        Window.open_DataSheet(self, self, self.mat_item)
+        return
 
     def Kg_hour(self):
         ab = 0
         TotalKG = 0
         TotalKG = askfloat(
-            'Total Kg', '-       Please, entry the Kg/hour.       -')
+            'Total kg', '-       Please, entry the kg/hour.       -')
         if TotalKG == None:
             TotalKG = 0.0
             return
-        self.Kgh.set(str(TotalKG) + " Kg")
+        self.Kgh.set(str(TotalKG) + " kg")
         self.Next_Mix = True
         t = len(self.treeTop.get_children())
         for row_id in self.treeTop.get_children():
@@ -1585,22 +2790,27 @@ class Sample_Window(tk.Toplevel):
                 dat = dat*Decimal(1000)
                 dat = str(round(dat, 1)) + " grams"
             else:
-                dat = str(round(dat, 2)) + " Kg"
+                dat = str(round(dat, 2)) + " kg"
             self.treeTop.item(row_id, text="blub", values=(
                 datos[0], datos[1], datos[2], datos[3], datos[4], dat, datos[6]))
             ab = ab + 1
+        msgb = tk.messagebox.askquestion(
+            "Mixing Amount", f"Do you want to open the Mixing Window?", icon="info", parent=self)
+        if msgb == "yes":
+            self.Kg_Mixing()
 
+#### Botón Mostrar kg totales ####
     def Kg_Mixing(self):
 
         if self.Next_Mix == False:
             messagebox.showinfo(
-                message="Please, set the Kg to mix first!", title="Kg/h not set", parent=self)
+                message="Please, set the kg to mix first!", title="kg/h not set", parent=self)
             return
 
         Layers = []
         self.contenedor = []
         self.TotalMix = []
-    #### Layers Hacer array con items Sample selecionado ####
+    #### Layers hacer array con items Sample selecionado ####
         flag = ""
         x = -1
         y = 0
@@ -1613,7 +2823,7 @@ class Sample_Window(tk.Toplevel):
             del row[2]
             Layers.append(row)
 
-    #### Contnedor Agrupar materiales por cada capa ####
+    #### Contenedor Agrupar materiales por cada capa ####
         for row in Layers:
             if row[0] == flag or flag == "":
                 if len(self.contenedor) != 0:
@@ -1624,6 +2834,7 @@ class Sample_Window(tk.Toplevel):
                     self.contenedor.append(row)
             else:
                 rot = str(row[1]), str(row[2]), str(row[3])
+
                 self.contenedor.append(row)
                 y = y + 1
                 LogText = f"one pair ---- {str(y)} --- {rot}"
@@ -1688,8 +2899,18 @@ class Sample_Window(tk.Toplevel):
         # print(self.TotalMix)
         self.ventana_secundaria = ShowMatmix(
             self, self.TotalMix, self.check, self.TKg_mix)
-#### Añade todos los materiales de cada capa ####
 
+#### Pasa kg a gr y al revés ####
+    def change_gr_kg(self, dat, dat1):
+
+        if "gr" in dat:
+            newdat = Decimal(dat1) / 1000
+            return newdat
+        if "kg" in dat:
+            newdat = Decimal(dat1) * 1000
+            return newdat
+
+#### Añade todos los materiales de cada capa ####
     def Add_mat(self, conten, ck):
         ck1 = -1
         if self.Nlayers == "":
@@ -1704,7 +2925,7 @@ class Sample_Window(tk.Toplevel):
                     self.Kg_grams.append(str(item[(it1)]))
                 # print(str(self.Capas))
 
-#### Suma los Kg/gramos de todas las capas ####
+#### Suma los kg/gramos de todas las capas ####
     def Save_Materials(self, capas, kg_grams, Nlayers):
         res = dict.fromkeys(capas, 0)
         for a, b in zip(capas, kg_grams):
@@ -1722,21 +2943,23 @@ class Sample_Window(tk.Toplevel):
     def Sub_Lista(self, lista1, lista2):
         return [x for x in lista1 if x in lista2]
 
-#### Generar matriz con items con/sin Kg/grams de cada capa y material ####
+#### Generar matriz con items con/sin kg/grams de cada capa y material ####
     def Total_Kg_Item(self, amount, bol):
 
         for n in amount:
             x = amount.index(n)
-            if " Kg" in str(n):
+            if " kg" in str(n):
                 if bol == True:
                     amount[x] = ""
                 else:
-                    amount[x] = str(amount[x]).replace(" Kg", "")
+                    amount[x] = str(amount[x]).replace(" kg", "")
+                    str(self.change_gr_kg("kg", amount[x]))
             if " grams" in str(n):
                 if bol == True:
                     amount[x] = ""
                 else:
                     amount[x] = str(amount[x]).replace(" grams", "")
+                    amount[x] = str(self.change_gr_kg("gr", amount[x]))
 
         tkg = amount
         self.TKg_mix.append(tkg)
@@ -1744,6 +2967,8 @@ class Sample_Window(tk.Toplevel):
             self.TKg_Final.append(tkg)
         # print ("----->" + str(tkg))
         tkg = ""
+
+#### Temperaturas según material ####
 
     def Temp_Profile(self):
 
@@ -1772,6 +2997,8 @@ class Sample_Window(tk.Toplevel):
             f.close()
             return
 
+#### Rellenar Zonas Temeperatura ####
+
     def Fill_Labels(self, data):
 
         match1 = data.split(";")
@@ -1799,11 +3026,13 @@ class Sample_Window(tk.Toplevel):
         if self.msg_box == 'yes':
             self.NewTemp = ""
             self.entry_temp1 = askinteger(
-                "Saving Temp", "-                    Temp. Feeding Zone?                    -", parent=self)
+                "Saving Temp", "-                    Temp. Feeding Zone?                    -", parent=self.parent)
+
             self.entry_temp2 = askinteger(
-                "Saving Temp", "-                     Temp. Zone 1?                         -", parent=self)
+                "Saving Temp", "-                     Temp. Zone 1?                         -", parent=self.parent)
+
             self.entry_temp3 = askinteger(
-                "Saving Temp", "-                     Temp. Zone 2?                         -", parent=self)
+                "Saving Temp", "-                     Temp. Zone 2?                         -", parent=self.parent)
             self.entry_temp4 = askinteger(
                 "Saving Temp", "-                     Temp. Zone 3?                         -", parent=self)
             self.entry_temp5 = askinteger(
@@ -1895,17 +3124,20 @@ class Sample_Window(tk.Toplevel):
         self.Temp_Profile()
         # print("---- > " + str(Value[6]))
 
+#### Rellenar Comentarios ####
     def Open_Comments(self):
 
         if self.Check_Item_Tree() == False:
             return
+        material = self.mat_item
         option = False
-        PFile = r"C:\Python\Comments/"  # + self.mat_item + ".pdf"
+        PFile = r"C:/Python/Comments/"  # + self.mat_item + ".pdf"
         contenido = os.scandir(PFile)
         for elemento in contenido:
             # print(str(elemento.name))
             elementos = elemento.name.split(".")
-            r = SequenceMatcher(None, str(elementos[0]), self.mat_item).ratio()
+            r = SequenceMatcher(
+                None, str(elementos[0]), material).ratio()
             # print(r)
             if r > 0.98:
                 # webbrowser.open(elemento)
@@ -1913,10 +3145,11 @@ class Sample_Window(tk.Toplevel):
                 option = True
                 break
         if option == False:
-            self.msg_box = tk.messagebox.askquestion('Resin Comments', "There is no comments for " + str(self.mat_item)
-                                                     + " \nDo you want to write it?", icon='warning', parent=self)
-            if self.msg_box == "yes":
-                elemento = r"C:\Python\Comments/" + str(self.mat_item) + ".txt"
+            msg_box = tk.messagebox.askquestion('Resin Comments', "There is no comments for " + str(material)
+                                                + " \nDo you want to write it?", icon='warning', parent=self)
+            if msg_box == "yes":
+                elemento = r"C:/Python/Comments/" + \
+                    str(material) + ".txt"
                 ShowCommnets(self, elemento)
 
 #######  -------- GUI - Comments Window  -------- ######
@@ -1995,7 +3228,7 @@ class ShowMatmix(tk.Toplevel):
                       "+"+str(pwidth)+"+"+str(pheight))
         self.title("Weight distribution")
         self.focus()
-        self.grab_set()
+        # self.grab_set()
 
         Label(master=self, text="Amount Materials Mixing Percentage",
               font=("Verdana bold", 14)).place(x=190, y=20)
@@ -2024,6 +3257,7 @@ class ShowMatmix(tk.Toplevel):
         b1 = 0
         i = 0
         c = 0
+
 #####  Generar labels con materiales y su peso  #####
         for k in l2:
             txt = "Layers : " + str(k)
@@ -2045,10 +3279,12 @@ class ShowMatmix(tk.Toplevel):
 
     def WeightConversion(we):
         nn = str(we).split(".")
-        if len(nn[1]) == 1:
-            dat = str(we) + " grams"
+        if nn[0] == "0":
+            dat1 = Decimal(we)*1000
+            dat = str(round(dat1, 1)) + " grams"
         else:
-            dat = str(we) + " Kg"
+            # dat1 = Decimal(we)/1000
+            dat = str(we) + " kg"
         return dat
 
     def Labels_fill(self, txt, pos, b, c):
@@ -2078,7 +3314,7 @@ class ShowDensity(tk.Toplevel):
                       "+"+str(pwidth)+"+"+str(pheight))
         self.title("Density & MFI calculations results")
         self.focus()
-        self.grab_set()
+        # self.grab_set()
 
         Label(master=self, text="Amount Densities & MFI layers",
               font=("Verdana bold", 14)).place(x=190, y=20)
@@ -2109,6 +3345,8 @@ class ShowDensity(tk.Toplevel):
         tk.Label(master=self, text=txt, font=(
             "Verdana", 12)).place(x=(40+c), y=(60+pos))
 
+######   -----------------   GUI  -  MDO window ------------ ######
+
 
 class Mdotools(tk.Toplevel):
 
@@ -2125,7 +3363,7 @@ class Mdotools(tk.Toplevel):
                       "+"+str(pwidth)+"+"+str(pheight))
         self.title("MDO tools calculation")
         self.focus()
-        self.grab_set()
+        # self.grab_set()
 
         Label(self, text="MDO tools calculation",
               font=("Verdana bold", 14)).grid(row=0, column=0, padx=(0, 0), columnspan=6, pady=10)
@@ -2137,13 +3375,13 @@ class Mdotools(tk.Toplevel):
               font=("Verdana bold", 10)).grid(row=3, column=1, padx=(15, 0), columnspan=1, pady=5, sticky="w")
         Label(self, text="Current Speed",
               font=("Verdana bold", 10)).grid(row=3, column=2, padx=(0, 0), columnspan=1, pady=5, sticky="w")
-        Label(self, text="Current Kg/h",
+        Label(self, text="Current kg/h",
               font=("Verdana bold", 10)).grid(row=3, column=3, padx=(5, 0), columnspan=1, pady=5, sticky="w")
         Label(self, text="Current rpm",
               font=("Verdana bold", 10)).grid(row=3, column=4, padx=(0, 0), columnspan=1, pady=5, sticky="w")
         Label(self, text="New Speed",
               font=("Verdana bold", 10)).grid(row=5, column=2, padx=(15, 0), pady=10, sticky="w")
-        Label(self, text="New Kg/h",
+        Label(self, text="New kg/h",
               font=("Verdana bold", 10)).grid(row=5, column=3, padx=(10, 0), columnspan=1, pady=10, sticky="w")
         Label(self, text="New rpm",
               font=("Verdana bold", 10)).grid(row=5, column=4, padx=(5, 0), columnspan=1, pady=10, sticky="w")
@@ -2396,8 +3634,8 @@ class Mdotools(tk.Toplevel):
                 self.Newratio.insert(0, round(res, 2))
 
             if tp == "2":
-                res = (Decimal(float(rpm)) * Decimal(float(set_gsm))) / \
-                    Decimal(float(real_gsm))
+                # res = (Decimal(float(rpm)) * Decimal(float(set_gsm))) / \
+                # Decimal(float(real_gsm))
 
                 self.Newrpm.delete(0, END)
                 self.Newrpm.insert(0, round(res, 2))
@@ -2421,5 +3659,11 @@ def main():
     root.mainloop()
 
 
+global colorWindow
+global colorLabels
+colorWindow = "cyan2"
+colorLabels = colorWindow
+colorEntrys = "sky blue"
 if __name__ == '__main__':
+
     main()
